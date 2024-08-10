@@ -32,7 +32,6 @@ bpftime_add_library(bpftime_llvm_jit_vm
     src/llvm/llvm_jit_context.cpp
     src/llvm/compiler.cpp
     src/llvm/compiler_utils.cpp
-    src/compat/compat_llvm.cpp
 )
 
 set_target_properties(bpftime_llvm_jit_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/../")
@@ -58,10 +57,18 @@ else()
 endif()
 
 if(NOT DEFINED SPDLOG_INCLUDE)
-  message(INFO "Adding spdlog seperately..")
+  message(INFO " Adding spdlog seperately..")
   # spdlog
-  add_subdirectory(../../third_party/spdlog ${CMAKE_CURRENT_BINARY_DIR}/spdlog)
-  set(SPDLOG_INCLUDE ../../third_party/spdlog/include)
+  include(FetchContent)
+
+    # Fetch spdlog
+    FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.14.1 # Specify the version you want to use
+    )
+    # Make the spdlog target available
+    FetchContent_MakeAvailable(spdlog)
 endif()
 
 # if BPFTIME_LLVM_JIT is set, then it's built in the bpftime project.

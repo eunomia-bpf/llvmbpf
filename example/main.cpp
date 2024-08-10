@@ -1,4 +1,4 @@
-#include "compat_llvm.hpp"
+#include "llvm_jit_context.hpp"
 #include <cstdint>
 #include <iostream>
 #include <ostream>

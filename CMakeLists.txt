@@ -79,6 +79,7 @@ if(${BPFTIME_LLVM_JIT})
     add_subdirectory(cli)
 else()
     if(${BPFTIME_ENABLE_UNIT_TESTING})
+      message(INFO " Adding Catch2 seperately..")
        FetchContent_Declare(
         catch
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git

@@ -26,7 +26,8 @@ jobs:
 
     - name: Build and install everything
       run: |
-        make release-with-llvm-jit -j
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
+          cmake --build build --target all -j
     - name: Do compilation & run
       run: |
         export PATH=$PATH:~/.bpftime

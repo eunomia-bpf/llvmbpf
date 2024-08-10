@@ -54,6 +54,7 @@ class bpftime_llvm_jit_vm {
 	std::optional<precompiled_ebpf_function>
 	load_aot_object(const std::vector<uint8_t> &object);
 
+	// Compile the eBPF program into a JITed function
 	std::optional<precompiled_ebpf_function> compile();
 
 	// See the spec for details.
@@ -66,11 +67,6 @@ class bpftime_llvm_jit_vm {
 			      uint64_t (*map_val)(uint64_t),
 			      uint64_t (*var_addr)(uint32_t),
 			      uint64_t (*code_addr)(uint32_t));
-
-	llvm_bpf_jit_context *get_jit_context()
-	{
-		return jit_ctx.get();
-	}
 
     private:
 	// See spec for details

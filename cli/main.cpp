@@ -86,6 +86,11 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 				name, vm.get_error_message());
 			return 1;
 		}
+		// add 1000 pesudo helpers so it can be used with helpers
+		for (int i = 0; i < 1000; i++) {
+			vm.register_external_function(
+				i, "helper_" + std::to_string(i), nullptr);
+		}
 		auto result = vm.do_aot_compile(emit_llvm);
 
 		auto out_path = output / (std::string(name) + ".o");

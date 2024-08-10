@@ -1,24 +1,35 @@
-name: Build and Test VM
+name: Run all input-output test for vm
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: "main"
+  pull_request: 
+    branches: "main"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 jobs:
   build:
+    strategy:
+      matrix:
+        container:
+          - ubuntu-2204
+          - fedora-39
+    runs-on: ubuntu-22.04
+    container: 
+      image: "manjusakalza/bpftime-base-image:${{matrix.container}}"
+      options: --privileged
+    steps:
     - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
-    - uses: actions/setup-python@v4
-      if: startsWith(matrix.container,'ubuntu')
-      with:
-        python-version: '3.8'
+
     - name: build
       run: 
            |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
           cmake --build build --target all -j
+
     - name: run testsuit x86
       shell: bash
       run: |

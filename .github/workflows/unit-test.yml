@@ -36,7 +36,7 @@ jobs:
 
     - name: Run tests
       run: |
-        ./build/unit-test/llvm_jit_tests
+        ./build/test/unit-test/llvm_jit_tests
 
     - name: build llvm JIT/AOT release as a standalone library
       run: |

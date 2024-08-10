@@ -43,7 +43,8 @@ if (${LLVM_PACKAGE_VERSION} VERSION_LESS 15)
     message(FATAL_ERROR "LLVM version must be >=15")
 endif()
 
-option(ENABLE_LLVM_SHARED "Link shared library of LLVM" YES)
+option(ENABLE_LLVM_SHARED "Link shared library of LLVM" NO)
+option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 
 if(ENABLE_LLVM_SHARED)
     set(LLVM_LIBS LLVM)
@@ -75,9 +76,12 @@ endif()
 # if BPFTIME_LLVM_JIT is set, then it's built in the bpftime project.
 # If not, it's built as a standalone library.
 if(${BPFTIME_LLVM_JIT})
-    # only build cli in the main project because it relies on libbpf
+    # build cli in the main project because it relies on libbpf
     add_subdirectory(cli)
 else()
+    if(${BUILD_LLVM_AOT_CLI})
+        add_subdirectory(cli)
+    endif()
     if(${BPFTIME_ENABLE_UNIT_TESTING})
       message(INFO " Adding Catch2 seperately..")
        FetchContent_Declare(

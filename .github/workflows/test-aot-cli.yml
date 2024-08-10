@@ -2,9 +2,9 @@ name: Build and test AOT cli
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -26,17 +26,16 @@ jobs:
 
     - name: Build and install everything
       run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBUILD_LLVM_AOT_CLI=1
           cmake --build build --target all -j
     - name: Do compilation & run
       run: |
         export PATH=$PATH:~/.bpftime
-        cd .github/assets
-        bpftime-vm build sum.bpf.o
+        ./build/cli/bpftime-vm build .github/assets/sum.bpf.o
         echo "AwAAAAEAAAACAAAAAwAAAA==" | base64 -d > test.bin
-        program_output=$(bpftime-vm run test.o test.bin)
+        program_output=$(./build/cli/bpftime-vm run test.o test.bin)
         echo $program_output
-        if echo $program_output | grep "Output: 6"; then
+        if echo $program_output | grep "Return value: 6"; then
           echo "Successful!"
           exit 0
         else

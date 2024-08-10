@@ -51,8 +51,25 @@ void run_ebpf_prog(const void *code, size_t code_len)
 
 ## Use llvmbpf as a AOT compiler
 
+AOT Compile a eBPF program:
 
+```console
+# ./build/cli/bpftime-vm build .github/assets/sum.bpf.o
+[2024-08-10 14:54:06.453] [info] [main.cpp:56] Processing program test
+[2024-08-10 14:54:06.454] [info] [llvm_jit_context.cpp:242] Initializing llvm
+[2024-08-10 14:54:06.477] [info] [llvm_jit_context.cpp:342] AOT: done, received 544 bytes
+[2024-08-10 14:54:06.479] [info] [main.cpp:69] Program test written to ./test.o
+```
 
+Load and run a AOTed eBPF program:
+
+```console
+# echo "AwAAAAEAAAACAAAAAwAAAA==" | base64 -d > test.bin
+# ./build/cli/bpftime-vm run test.o test.bin
+[2024-08-10 14:57:16.986] [info] [llvm_jit_context.cpp:242] Initializing llvm
+[2024-08-10 14:57:16.986] [info] [llvm_jit_context.cpp:392] LLVM-JIT: Loading aot object
+[2024-08-10 14:57:16.991] [info] [main.cpp:136] Program executed successfully. Return value: 6
+```
 
 ## Test with bpf-conformance
 

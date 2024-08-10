@@ -13,15 +13,15 @@
 #include "llvmbpf.hpp"
 
 extern "C" {
-	struct bpf_object;
-	struct bpf_program;
-	struct bpf_insn;
-	void bpf_object__close(bpf_object *obj);
-	bpf_program *bpf_object__next_program(const bpf_object *obj, bpf_program *prog);
-	const char *bpf_program__name(const bpf_program *prog);
-	bpf_object *bpf_object__open(const char *path);
-	const bpf_insn *bpf_program__insns(const bpf_program *prog);
-	size_t bpf_program__insn_cnt(const bpf_program *prog);
+struct bpf_object;
+struct bpf_program;
+struct bpf_insn;
+void bpf_object__close(bpf_object *obj);
+bpf_program *bpf_object__next_program(const bpf_object *obj, bpf_program *prog);
+const char *bpf_program__name(const bpf_program *prog);
+bpf_object *bpf_object__open(const char *path);
+const bpf_insn *bpf_program__insns(const bpf_program *prog);
+size_t bpf_program__insn_cnt(const bpf_program *prog);
 }
 
 using namespace bpftime;
@@ -31,8 +31,9 @@ static void print_usage(const std::string &program_name)
 	std::cerr
 		<< "Usage: " << program_name << " <command> [options]\n"
 		<< "Commands:\n"
-		<< "  build <EBPF_ELF> [-o <output_directory>]\n"
+		<< "  build <EBPF_ELF> [-o <output_directory>] [-emit-llvm]\n"
 		<< "      Build native ELF(s) from eBPF ELF. Each program in the eBPF ELF will be built into a single native ELF.\n"
+		<< "      If -emit-llvm is specified, the LLVM IR will be printed to stdout.\n"
 		<< "  run <PATH> [MEMORY]\n"
 		<< "      Run a native eBPF program.\n";
 }
@@ -47,8 +48,19 @@ parse_optional_argument(int argc, const char **argv, int &i,
 	return std::nullopt;
 }
 
+static bool has_argument(int argc, const char **argv, const std::string &option)
+{
+	for (int i = 0; i < argc; ++i) {
+		if (std::string(argv[i]) == option) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static int build_ebpf_program(const std::string &ebpf_elf,
-			      const std::filesystem::path &output)
+			      const std::filesystem::path &output,
+			      bool emit_llvm)
 {
 	bpf_object *obj = bpf_object__open(ebpf_elf.c_str());
 	if (!obj) {
@@ -61,8 +73,9 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 	for ((prog) = bpf_object__next_program((elf.get()), __null);
 	     (prog) != __null;
 	     (prog) = bpf_object__next_program((elf.get()), (prog))) {
-		const char* name = bpf_program__name(prog);
-		SPDLOG_INFO("Processing program {}", name);
+		const char *name = bpf_program__name(prog);
+		if (!emit_llvm)
+			SPDLOG_INFO("Processing program {}", name);
 		bpftime_llvm_jit_vm vm;
 
 		if (vm.load_code((const void *)bpf_program__insns(prog),
@@ -73,11 +86,14 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 				name, vm.get_error_message());
 			return 1;
 		}
-		auto result = vm.do_aot_compile(false);
+		auto result = vm.do_aot_compile(emit_llvm);
+
 		auto out_path = output / (std::string(name) + ".o");
 		std::ofstream ofs(out_path, std::ios::binary);
 		ofs.write((const char *)result.data(), result.size());
-		SPDLOG_INFO("Program {} written to {}", name, out_path.c_str());
+		if (!emit_llvm)
+			SPDLOG_INFO("Program {} written to {}", name,
+				    out_path.c_str());
 	}
 	return 0;
 }
@@ -185,7 +201,9 @@ int main(int argc, const char **argv)
 			}
 		}
 
-		return build_ebpf_program(ebpf_elf, output);
+		bool emit_llvm = has_argument(argc, argv, "-emit-llvm");
+
+		return build_ebpf_program(ebpf_elf, output, emit_llvm);
 	} else if (command == "run") {
 		if (argc < 3) {
 			print_usage(argv[0]);

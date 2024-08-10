@@ -41,8 +41,6 @@ foreach(file ${test_sources})
   # Setup code coverage if enabled
   #
   if(BPFTIME_ENABLE_CODE_COVERAGE)
-    target_compile_options(bpftime_vm_compat PUBLIC -O0 -g -fprofile-arcs -ftest-coverage)
-    target_link_options(bpftime_vm_compat PUBLIC -fprofile-arcs -ftest-coverage)
     message(DEBUG "Code coverage is enabled and provided with GCC.")
   endif()
 

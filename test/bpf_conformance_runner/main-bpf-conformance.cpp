@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 	std::string log;
 
 	int err;
-	auto vm = bpftime::vm::compat::create_vm_instance();
+	auto vm = create_vm_instance();
 	assert(vm);
 	err = vm->load_code(&program[0], program.size() * 8);
 	if (err < 0) {

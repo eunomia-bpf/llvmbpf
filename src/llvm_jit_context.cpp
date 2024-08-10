@@ -138,7 +138,6 @@
 #endif
 
 #include "llvm_jit_context.hpp"
-#include "bpftime_vm_compat.hpp"
 #include "compiler_utils.hpp"
 #include "spdlog/spdlog.h"
 #include <iterator>
@@ -162,9 +161,6 @@
 #include <string>
 #include <spdlog/spdlog.h>
 #include <tuple>
-// #include <boost/interprocess/sync/file_lock.hpp>
-// #include <boost/interprocess/sync/scoped_lock.hpp>
-#include <compat_llvm.hpp>
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -237,9 +233,7 @@ extern "C" void __aeabi_unwind_cpp_pr1();
 
 static int llvm_initialized = 0;
 
-llvm_bpf_jit_context::llvm_bpf_jit_context(
-	class bpftime::vm::llvm::bpftime_llvm_jit_vm *vm)
-	: vm(vm)
+llvm_bpf_jit_context::llvm_bpf_jit_context(bpftime_llvm_jit_vm& vm) : vm(vm)
 {
 	using namespace llvm;
 	int zero = 0;
@@ -263,7 +257,7 @@ void llvm_bpf_jit_context::do_jit_compile()
 	this->jit = std::move(jit);
 }
 
-bpftime::vm::compat::precompiled_ebpf_function llvm_bpf_jit_context::compile()
+precompiled_ebpf_function llvm_bpf_jit_context::compile()
 {
 	spin_lock_guard guard(compiling.get());
 	if (!this->jit.has_value()) {
@@ -364,8 +358,8 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(bool print_ir)
 {
 	std::vector<std::string> extNames, lddwNames;
-	for (uint32_t i = 0; i < std::size(vm->ext_funcs); i++) {
-		if (vm->ext_funcs[i].has_value()) {
+	for (uint32_t i = 0; i < std::size(vm.ext_funcs); i++) {
+		if (vm.ext_funcs[i].has_value()) {
 #if LLVM_VERSION_MAJOR >= 16
 			extNames.emplace_back(ext_func_sym(i));
 #else
@@ -384,12 +378,12 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(bool print_ir)
 		}
 	};
 	// Only map_val will have a chance to be called at runtime
-	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm->map_val);
+	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
 	// These symbols won't be used at runtime
-	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm->map_by_fd);
-	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm->map_by_idx);
-	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm->code_addr);
-	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm->var_addr);
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm.map_by_fd);
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm.map_by_idx);
+	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
+	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
 	return this->do_aot_compile(extNames, lddwNames, print_ir);
 }
 
@@ -429,10 +423,10 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	std::vector<std::string> extFuncNames;
 	// insert the helper functions
 	SymbolMap extSymbols;
-	for (uint32_t i = 0; i < std::size(vm->ext_funcs); i++) {
-		if (vm->ext_funcs[i].has_value()) {
+	for (uint32_t i = 0; i < std::size(vm.ext_funcs); i++) {
+		if (vm.ext_funcs[i].has_value()) {
 			auto sym = JITEvaluatedSymbol::fromPointer(
-				vm->ext_funcs[i]->fn);
+				vm.ext_funcs[i]->fn);
 			auto symName = jit->getExecutionSession().intern(
 				ext_func_sym(i));
 			sym.setFlags(JITSymbolFlags::Callable |
@@ -486,18 +480,17 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	};
 	// Only map_val will have a chance to be called at runtime, so it's the
 	// only symbol to be defined
-	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm->map_val);
+	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
 	// These symbols won't be used at runtime
-	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm->map_by_fd);
-	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm->map_by_idx);
-	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm->code_addr);
-	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm->var_addr);
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm.map_by_fd);
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm.map_by_idx);
+	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
+	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
 	ExitOnErr(mainDylib.define(absoluteSymbols(lddwSyms)));
 	return { std::move(jit), extFuncNames, definedLddwHelpers };
 }
 
-bpftime::vm::compat::precompiled_ebpf_function
-llvm_bpf_jit_context::get_entry_address()
+precompiled_ebpf_function llvm_bpf_jit_context::get_entry_address()
 {
 	if (!this->jit.has_value()) {
 		SPDLOG_CRITICAL(
@@ -511,7 +504,7 @@ llvm_bpf_jit_context::get_entry_address()
 		SPDLOG_CRITICAL("Unable to find symbol `bpf_main`: {}", buf);
 		throw std::runtime_error("Unable to link symbol `bpf_main`");
 	} else {
-		auto addr = err->toPtr<vm::compat::precompiled_ebpf_function>();
+		auto addr = err->toPtr<precompiled_ebpf_function>();
 		SPDLOG_DEBUG("LLVM-JIT: Entry func is {:x}", (uintptr_t)addr);
 		return addr;
 	}

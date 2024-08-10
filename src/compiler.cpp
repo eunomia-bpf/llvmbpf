@@ -27,7 +27,7 @@
 #include <endian.h>
 #include "compiler_utils.hpp"
 #include <spdlog/spdlog.h>
-#include <compat_llvm.hpp>
+
 using namespace llvm;
 using namespace llvm::orc;
 using namespace bpftime;
@@ -93,7 +93,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		     patch_map_val_at_compile_time);
 	auto context = std::make_unique<LLVMContext>();
 	auto jitModule = std::make_unique<Module>("bpf-jit", *context);
-	const auto &insts = vm->instructions;
+	const auto &insts = vm.instructions;
 	if (insts.empty()) {
 		return llvm::make_error<llvm::StringError>(
 			"No instructions provided",
@@ -643,10 +643,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				SPDLOG_DEBUG(
 					"Emit lddw helper 1 (map_by_fd) at pc {}, imm={}, patched at compile time",
 					pc, inst.imm);
-				if (vm->map_by_fd) {
+				if (vm.map_by_fd) {
 					builder.CreateStore(
-						builder.getInt64(vm->map_by_fd(
-							inst.imm)),
+						builder.getInt64(
+							vm.map_by_fd(inst.imm)),
 						regs[inst.dst_reg]);
 				} else {
 					SPDLOG_INFO(
@@ -663,8 +663,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					"Emit lddw helper 2 (map_by_fd + map_val) at pc {}, imm1={}, imm2={}",
 					pc, inst.imm, nextInst.imm);
 				uint64_t mapPtr;
-				if (vm->map_by_fd) {
-					mapPtr = vm->map_by_fd(inst.imm);
+				if (vm.map_by_fd) {
+					mapPtr = vm.map_by_fd(inst.imm);
 				} else {
 					SPDLOG_INFO(
 						"map_by_fd is called in eBPF code, but is not provided, will use the default behavior");
@@ -674,7 +674,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				if (patch_map_val_at_compile_time) {
 					SPDLOG_DEBUG(
 						"map_val is required to be evaluated at compile time");
-					if (!vm->map_val) {
+					if (!vm.map_val) {
 						return llvm::make_error<
 							llvm::StringError>(
 							"map_val is not provided, unable to compile",
@@ -682,7 +682,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					}
 					builder.CreateStore(
 						builder.getInt64(
-							vm->map_val(mapPtr) +
+							vm.map_val(mapPtr) +
 							nextInst.imm),
 						regs[inst.dst_reg]);
 				} else {
@@ -717,21 +717,20 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				SPDLOG_DEBUG(
 					"Emit lddw helper 3 (var_addr) at pc {}, imm1={}",
 					pc, inst.imm);
-				if (!vm->var_addr) {
+				if (!vm.var_addr) {
 					return llvm::make_error<
 						llvm::StringError>(
 						"var_addr is not provided, unable to compile",
 						llvm::inconvertibleErrorCode());
 				}
 				builder.CreateStore(
-					builder.getInt64(
-						vm->var_addr(inst.imm)),
+					builder.getInt64(vm.var_addr(inst.imm)),
 					regs[inst.dst_reg]);
 			} else if (inst.src_reg == 4) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (code_addr) at pc {}, imm1={}",
 					pc, inst.imm);
-				if (!vm->code_addr) {
+				if (!vm.code_addr) {
 					return llvm::make_error<
 						llvm::StringError>(
 						"code_addr is not provided, unable to compile",
@@ -739,15 +738,15 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				}
 				builder.CreateStore(
 					builder.getInt64(
-						vm->code_addr(inst.imm)),
+						vm.code_addr(inst.imm)),
 					regs[inst.dst_reg]);
 			} else if (inst.src_reg == 5) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (map_by_idx) at pc {}, imm1={}",
 					pc, inst.imm);
-				if (vm->map_by_idx) {
+				if (vm.map_by_idx) {
 					builder.CreateStore(
-						builder.getInt64(vm->map_by_idx(
+						builder.getInt64(vm.map_by_idx(
 							inst.imm)),
 						regs[inst.dst_reg]);
 				} else {
@@ -766,8 +765,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					pc, inst.imm, nextInst.imm);
 
 				uint64_t mapPtr;
-				if (vm->map_by_idx) {
-					mapPtr = vm->map_by_idx(inst.imm);
+				if (vm.map_by_idx) {
+					mapPtr = vm.map_by_idx(inst.imm);
 				} else {
 					SPDLOG_DEBUG(
 						"map_by_idx is called in eBPF code, but it's not provided, will use the default behavior");
@@ -777,10 +776,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				if (patch_map_val_at_compile_time) {
 					SPDLOG_DEBUG(
 						"Required to evaluate map_val at compile time");
-					if (vm->map_val) {
+					if (vm.map_val) {
 						builder.CreateStore(
 							builder.getInt64(
-								vm->map_val(
+								vm.map_val(
 									mapPtr) +
 								nextInst.imm),
 							regs[inst.dst_reg]);

@@ -29,9 +29,10 @@ function(bpftime_add_library target)
 endfunction()
 
 bpftime_add_library(bpftime_llvm_jit_vm
-    src/llvm/llvm_jit_context.cpp
-    src/llvm/compiler.cpp
-    src/llvm/compiler_utils.cpp
+    src/llvm_jit_context.cpp
+    src/compiler.cpp
+    src/compiler_utils.cpp
+    src/vm.cpp
 )
 
 set_target_properties(bpftime_llvm_jit_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/../")
@@ -56,11 +57,11 @@ else()
     )
 endif()
 
-if(NOT DEFINED SPDLOG_INCLUDE)
-  message(INFO " Adding spdlog seperately..")
-  # spdlog
-  include(FetchContent)
+include(FetchContent)
 
+if(NOT DEFINED SPDLOG_INCLUDE)
+    message(INFO " Adding spdlog seperately..")
+    # spdlog
     # Fetch spdlog
     FetchContent_Declare(
     spdlog
@@ -78,19 +79,25 @@ if(${BPFTIME_LLVM_JIT})
     add_subdirectory(cli)
 else()
     if(${BPFTIME_ENABLE_UNIT_TESTING})
-        add_subdirectory(../../third_party/Catch2 ${CMAKE_CURRENT_BINARY_DIR}/Catch2)
+       FetchContent_Declare(
+        catch
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG v3.4.0 # Specify the version you want to use
+      )
+      
+      # Make the Catch2 target available
+      FetchContent_MakeAvailable(catch)
     endif()
-    add_subdirectory(../compat ${CMAKE_CURRENT_BINARY_DIR}/compat)
 endif()
 
 message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
 find_package(Boost REQUIRED)
 
-target_link_libraries(bpftime_llvm_jit_vm PUBLIC ${LLVM_LIBS} bpftime_vm_compat PRIVATE spdlog::spdlog)
+target_link_libraries(bpftime_llvm_jit_vm PUBLIC ${LLVM_LIBS} PRIVATE spdlog::spdlog)
     target_include_directories(bpftime_llvm_jit_vm 
     PUBLIC ${LLVM_INCLUDE_DIRS} ${SPDLOG_INCLUDE} ${Boost_INCLUDE} ../include include #LLVM jit also used these headers
 )
-add_dependencies(bpftime_llvm_jit_vm bpftime_vm_compat spdlog::spdlog)
+add_dependencies(bpftime_llvm_jit_vm spdlog::spdlog)
 
 if(BPFTIME_ENABLE_UNIT_TESTING)
   message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")

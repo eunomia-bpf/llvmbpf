@@ -1,7 +1,7 @@
-# bpftime-vm
+# bpftime-vm cli tool
 
 ```console
-root@mnfe-pve:~# bpftime-vm
+# bpftime-vm
 Usage: bpftime-vm [--help] [--version] {build,run}
 
 Optional arguments:
@@ -13,7 +13,7 @@ Subcommands:
   run           Run an native eBPF program
 ```
 
-A CLI program for AOT of llvm-jit.
+A CLI compiler for AOT of llvm-jit.
 
 It can build ebpf ELF into native elf, or execute compiled native ELF. **Helpers and relocations are not supported**
 

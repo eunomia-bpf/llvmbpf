@@ -8,3 +8,4 @@ CMakeFiles
 _deps
 cmake_install.cmake
 compile_commands.json
+libbpftime_llvm_jit_vm.a

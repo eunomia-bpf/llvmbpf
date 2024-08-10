@@ -9,6 +9,7 @@ project(
 )
 
 add_subdirectory(bpf_conformance_runner)
+add_subdirectory(unit-test)
 
 message(DEBUG "Adding tests under ${CMAKE_PROJECT_NAME}Tests...")
 

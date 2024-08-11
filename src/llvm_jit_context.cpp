@@ -233,13 +233,13 @@ extern "C" void __aeabi_unwind_cpp_pr1();
 
 static int llvm_initialized = 0;
 
-llvm_bpf_jit_context::llvm_bpf_jit_context(bpftime_llvm_jit_vm& vm) : vm(vm)
+llvm_bpf_jit_context::llvm_bpf_jit_context(bpftime_llvm_jit_vm &vm) : vm(vm)
 {
 	using namespace llvm;
 	int zero = 0;
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
-		SPDLOG_INFO("Initializing llvm");
+		SPDLOG_DEBUG("Initializing llvm");
 		InitializeNativeTarget();
 		InitializeNativeTargetAsmPrinter();
 	}
@@ -286,7 +286,7 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 		return module->withModuleDo([&](auto &module)
 						    -> std::vector<uint8_t> {
 			if (print_ir) {
-				module.print(errs(), nullptr);
+				module.print(llvm::outs(), nullptr);
 			}
 			optimizeModule(module);
 			module.setTargetTriple(defaultTargetTriple);
@@ -339,8 +339,8 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 			}
 
 			pass.run(module);
-			SPDLOG_INFO("AOT: done, received {} bytes",
-				    objStream.size());
+			SPDLOG_DEBUG("AOT: done, received {} bytes",
+				     objStream.size());
 
 			std::vector<uint8_t> result(objStream.begin(),
 						    objStream.end());

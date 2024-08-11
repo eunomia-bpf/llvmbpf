@@ -106,7 +106,7 @@ add_dependencies(bpftime_llvm_jit_vm spdlog::spdlog)
 
 if(BPFTIME_ENABLE_UNIT_TESTING)
   message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")
-  add_subdirectory(unit-test)
+  add_subdirectory(test)
 endif()
 
 add_subdirectory(example)

@@ -1,30 +1,53 @@
-name: Build and Test VM
+name: Build and Test VM input and output
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 jobs:
   build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        container:
+          - ubuntu-2204
+          - fedora-39
+    container: 
+      image: "manjusakalza/bpftime-base-image:${{matrix.container}}"
+      options: --privileged
+    steps:
+
+    - name: cache dependencies
+      uses: actions/cache@v2
+      id: cache
+      with:
+        path: ${{ github.workspace }}/${{ env.INSTALL_LOCATION }}
+        key: ${{ runner.os }}-dependencies
+
     - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
+
     - uses: actions/setup-python@v4
       if: startsWith(matrix.container,'ubuntu')
       with:
         python-version: '3.8'
+
     - name: build
       run: 
            |
-          sudo apt install llvm-15-dev
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
           cmake --build build --target all -j
+
     - name: run testsuit x86
       shell: bash
       run: |
-        python3.8 -m venv vm/test
-        source vm/test/bin/activate
-        pip install -r vm/test/requirements.txt
+        python3.8 -m venv ./test
+        source test/bin/activate
+        pip install -r test/requirements.txt
         # make build # or build-arm32 build-arm64
-        make -C vm test-vm -j
+        pytest -v -s test/test_framework

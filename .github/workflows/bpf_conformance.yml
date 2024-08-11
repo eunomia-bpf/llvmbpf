@@ -44,7 +44,7 @@ jobs:
 
     - name: get bpf_conformance
       run: |
-        git clone https://github.com/Alan-Jowett/bpf_conformance
+        git clone https://github.com/Alan-Jowett/bpf_conformance --recursive
         cd bpf_conformance
         cmake . -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build --target bpf_conformance_runner

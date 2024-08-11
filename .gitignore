@@ -12,3 +12,6 @@ libbpftime_llvm_jit_vm.a
 test.o
 test.bin
 *.ll
+bpf_conformance
+
+

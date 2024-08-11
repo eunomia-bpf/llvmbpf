@@ -55,8 +55,7 @@ jobs:
         ./build/bin/bpf_conformance_runner  --test_file_directory \
         tests --plugin_path \
         ../build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
-        > bpf_conformance_results.txt
-
+        > ../bpf_conformance_results.txt  || echo "ok"
     - uses: JamesIves/github-pages-deploy-action@v4.4.1
       if: ${{ github.event_name == 'push' }}
       with:

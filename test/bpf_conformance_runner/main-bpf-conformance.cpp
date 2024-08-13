@@ -43,10 +43,9 @@ std::vector<ebpf_inst> bytes_to_ebpf_inst(std::vector<uint8_t> bytes)
 	return instructions;
 }
 
-uint64_t ffi_print_integer(uint64_t a, uint64_t b, uint64_t _c, uint64_t _d,
-			   uint64_t _e)
+uint64_t empty_helper_func(uint64_t _a, uint64_t _b, uint64_t _c, uint64_t _d,
+	       uint64_t _e)
 {
-	std::cout << a << " -> " << b << std::endl;
 	return 0;
 }
 
@@ -109,6 +108,11 @@ int main(int argc, char **argv)
 	if (err < 0) {
 		std::cerr << "Error: " << vm.get_error_message() << std::endl;
 		return -1;
+	}
+	// add 1000 pesudo helpers so it can be tested with helpers
+	for (int i = 0; i < 1000; i++) {
+		vm.register_external_function(i, "helper_" + std::to_string(i),
+					      (void*)empty_helper_func);
 	}
 	auto func = vm.compile();
 	assert(func);

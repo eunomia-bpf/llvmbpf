@@ -30,7 +30,7 @@ See [example](example/main.cpp) of how to use the library as a vm:
 void run_ebpf_prog(const void *code, size_t code_len)
 {
     uint64_t res = 0;
-    bpftime_llvm_jit_vm vm;
+    llvmbpf_vm vm;
 
     res = vm.load_code(code, code_len);
     if (res) {

@@ -76,7 +76,7 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 		const char *name = bpf_program__name(prog);
 		if (!emit_llvm)
 			SPDLOG_INFO("Processing program {}", name);
-		bpftime_llvm_jit_vm vm;
+		llvmbpf_vm vm;
 
 		if (vm.load_code((const void *)bpf_program__insns(prog),
 				 (uint32_t)bpf_program__insn_cnt(prog) * 8) <
@@ -125,7 +125,7 @@ static int run_ebpf_program(const std::filesystem::path &elf,
 
 	file.close();
 
-	bpftime_llvm_jit_vm vm;
+	llvmbpf_vm vm;
 	auto func = vm.load_aot_object(file_buffer);
 	if (!func) {
 		SPDLOG_CRITICAL("Failed to load AOT object from ELF file: {}",

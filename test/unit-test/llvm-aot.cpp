@@ -12,7 +12,7 @@ extern "C" uint64_t add_func(uint64_t a, uint64_t b, uint64_t, uint64_t,
 
 TEST_CASE("Test aot compilation")
 {
-	bpftime::bpftime_llvm_jit_vm vm;
+	bpftime::llvmbpf_vm vm;
 	REQUIRE(vm.register_external_function(3, "add", (void *)add_func) == 0);
 	REQUIRE(vm.load_code((const void *)bpf_function_call_add,
 			     sizeof(bpf_function_call_add) - 1) == 0);

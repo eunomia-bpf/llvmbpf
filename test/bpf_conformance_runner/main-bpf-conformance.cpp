@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 	std::string log;
 
 	int err;
-	auto vm = bpftime_llvm_jit_vm();
+	auto vm = llvmbpf_vm();
 	err = vm.load_code(&program[0], program.size() * sizeof(ebpf_inst));
 	if (err < 0) {
 		std::cerr << "Error: " << vm.get_error_message() << std::endl;

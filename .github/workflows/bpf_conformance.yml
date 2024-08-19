@@ -63,6 +63,7 @@ jobs:
         # Upload entire repository
         path: '.'
   deploy:
+    if: github.event_name == 'push'
     # Add a dependency to the build job
     needs: build
 

@@ -233,7 +233,7 @@ extern "C" void __aeabi_unwind_cpp_pr1();
 
 static int llvm_initialized = 0;
 
-llvm_bpf_jit_context::llvm_bpf_jit_context(bpftime_llvm_jit_vm &vm) : vm(vm)
+llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 {
 	using namespace llvm;
 	int zero = 0;

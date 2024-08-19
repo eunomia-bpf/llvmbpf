@@ -21,10 +21,10 @@ class llvm_bpf_jit_context;
 // The JITed function can be called with the memory and memory length directly.
 using precompiled_ebpf_function = uint64_t (*)(void *mem, size_t mem_len);
 
-class bpftime_llvm_jit_vm {
+class llvmbpf_vm {
     public:
-	bpftime_llvm_jit_vm();
-	~bpftime_llvm_jit_vm();  // Destructor declared
+	llvmbpf_vm();
+	~llvmbpf_vm();  // Destructor declared
 	std::string get_error_message();
 	// register external function, e.g. helper functions for eBPF
 	int register_external_function(size_t index, const std::string &name,

@@ -74,7 +74,7 @@ const unsigned char bpf_function_call_print[] =
 void run_ebpf_prog(const void *code, size_t code_len)
 {
 	uint64_t res = 0;
-	bpftime_llvm_jit_vm vm;
+	llvmbpf_vm vm;
 	printf("running ebpf prog, code len: %zd\n", code_len);
 
 	res = vm.load_code(code, code_len);

@@ -37,9 +37,9 @@ add_dependencies(bpftime-vm-cli libbpf_project)
 
 include_directories(${LIBBPF_INCLUDE_DIRS})
 
-add_dependencies(bpftime-vm-cli spdlog::spdlog bpftime_llvm_jit_vm)
+add_dependencies(bpftime-vm-cli spdlog::spdlog llvmbpf_vm)
 target_link_libraries(bpftime-vm-cli 
-            PRIVATE spdlog::spdlog bpftime_llvm_jit_vm 
+            PRIVATE spdlog::spdlog llvmbpf_vm 
             ${LIBBPF_LIBRARIES} 
             elf 
             z

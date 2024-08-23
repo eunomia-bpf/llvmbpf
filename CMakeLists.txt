@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.16)
 
 project(
     "llvm-bpf-jit"
@@ -96,7 +96,6 @@ else()
 endif()
 
 message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
-find_package(Boost REQUIRED)
 
 target_link_libraries(llvmbpf_vm PUBLIC ${LLVM_LIBS} PRIVATE spdlog::spdlog)
     target_include_directories(llvmbpf_vm 

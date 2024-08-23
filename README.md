@@ -17,7 +17,7 @@ For a comprehensive userspace eBPF runtime that includes support for maps, helpe
 ## build
 
 ```sh
-sudo apt install llvm-15-dev
+sudo apt install llvm-15-dev libzstd-dev
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target all -j
 ```

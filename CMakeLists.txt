@@ -85,16 +85,16 @@ else()
         add_subdirectory(cli)
     endif()
 
-    if(${BPFTIME_ENABLE_UNIT_TESTING})
-        message(STATUS " Adding Catch2 seperately..")
+    if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT DEFINED Catch2_INCLUDE)
+        message(STATUS "Adding Catch2 seperately..")
         FetchContent_Declare(
-            catch
+            Catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
             GIT_TAG v3.4.0 # Specify the version you want to use
         )
 
         # Make the Catch2 target available
-        FetchContent_MakeAvailable(catch)
+        FetchContent_MakeAvailable(Catch2)
     endif()
 endif()
 

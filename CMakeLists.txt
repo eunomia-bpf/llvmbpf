@@ -39,7 +39,7 @@ set_target_properties(llvmbpf_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CU
 
 find_package(LLVM REQUIRED CONFIG)
 
-if (${LLVM_PACKAGE_VERSION} VERSION_LESS 15)
+if(${LLVM_PACKAGE_VERSION} VERSION_LESS 15)
     message(FATAL_ERROR "LLVM version must be >=15")
 endif()
 
@@ -62,13 +62,15 @@ include(FetchContent)
 
 if(NOT DEFINED SPDLOG_INCLUDE)
     message(INFO " Adding spdlog seperately..")
+
     # spdlog
     # Fetch spdlog
     FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.14.1 # Specify the version you want to use
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.14.1 # Specify the version you want to use
     )
+
     # Make the spdlog target available
     FetchContent_MakeAvailable(spdlog)
 endif()
@@ -82,30 +84,31 @@ else()
     if(${BUILD_LLVM_AOT_CLI})
         add_subdirectory(cli)
     endif()
+
     if(${BPFTIME_ENABLE_UNIT_TESTING})
-      message(INFO " Adding Catch2 seperately..")
-       FetchContent_Declare(
-        catch
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG v3.4.0 # Specify the version you want to use
-      )
-      
-      # Make the Catch2 target available
-      FetchContent_MakeAvailable(catch)
+        message(STATUS " Adding Catch2 seperately..")
+        FetchContent_Declare(
+            catch
+            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+            GIT_TAG v3.4.0 # Specify the version you want to use
+        )
+
+        # Make the Catch2 target available
+        FetchContent_MakeAvailable(catch)
     endif()
 endif()
 
 message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
 
 target_link_libraries(llvmbpf_vm PUBLIC ${LLVM_LIBS} PRIVATE spdlog::spdlog)
-    target_include_directories(llvmbpf_vm 
-    PUBLIC ${LLVM_INCLUDE_DIRS} ${SPDLOG_INCLUDE} ${Boost_INCLUDE} ../include include #LLVM jit also used these headers
+target_include_directories(llvmbpf_vm
+    PUBLIC ${LLVM_INCLUDE_DIRS} ${SPDLOG_INCLUDE} ${Boost_INCLUDE} ../include include # LLVM jit also used these headers
 )
 add_dependencies(llvmbpf_vm spdlog::spdlog)
 
 if(BPFTIME_ENABLE_UNIT_TESTING)
-  message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")
-  add_subdirectory(test)
+    message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")
+    add_subdirectory(test)
 endif()
 
 add_subdirectory(example)

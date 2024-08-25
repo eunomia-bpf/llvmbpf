@@ -32,7 +32,7 @@ jobs:
     - name: Install Ninja (Fedora)
       if: ${{matrix.container == 'fedora-39'}}
       run:
-        dnf install ninja-build
+        dnf install -y ninja-build
         
   
     - name: build

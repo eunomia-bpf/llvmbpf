@@ -33,7 +33,7 @@ jobs:
         submodules: 'recursive'
 
     - name: Install Ninja (Ubuntu)
-      if: ${{matrix.container == 'ubuntu-22.04'}}
+      if: ${{matrix.container == 'ubuntu-2204'}}
       run:
         apt install ninja-build
 

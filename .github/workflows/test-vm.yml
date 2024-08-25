@@ -32,6 +32,17 @@ jobs:
       with:
         submodules: 'recursive'
 
+    - name: Install Ninja (Ubuntu)
+      if: ${{matrix.container == 'ubuntu-22.04'}}
+      run:
+        apt install ninja-build
+
+    - name: Install Ninja (Fedora)
+      if: ${{matrix.container == 'fedora-39'}}
+      run:
+        dnf install ninja-build
+        
+    
     - uses: actions/setup-python@v4
       if: startsWith(matrix.container,'ubuntu')
       with:
@@ -40,7 +51,7 @@ jobs:
     - name: build
       run: 
            |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -G Ninja
           cmake --build build --target all -j
 
     - name: run testsuit x86

@@ -36,16 +36,10 @@ jobs:
       with:
         python-version: '3.8'
 
-    
-    - name: Install Ninja (Ubuntu)
-      if: ${{matrix.container == 'ubuntu-2204'}}
-      run:
-        apt install ninja-build
-    
     - name: build
       run: 
            |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -G Ninja
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1
           cmake --build build --target all -j
 
     - name: get bpf_conformance

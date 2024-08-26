@@ -1,5 +1,5 @@
-
-if(${ENABLE_EBPF_VERIFIER})
+# Have to fetch Catch2
+if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT DEFINED Catch2_INCLUDE)
     Include(FetchContent)
     FetchContent_Declare(
         Catch2
@@ -7,7 +7,6 @@ if(${ENABLE_EBPF_VERIFIER})
         GIT_TAG v3.4.0
     )
     FetchContent_MakeAvailable(Catch2)
-    # if not enable verifier, we will use the catch2 from submodule
 endif()
 
 set(TEST_SOURCES

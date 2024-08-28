@@ -1,5 +1,6 @@
 # Have to fetch Catch2
-if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT DEFINED Catch2_INCLUDE)
+if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT TARGET Catch2)
+    message(STATUS "Adding Catch2 by FetchContent at llvmbpf/test/unit-test")
     Include(FetchContent)
     FetchContent_Declare(
         Catch2

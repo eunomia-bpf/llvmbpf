@@ -6,16 +6,16 @@ namespace bpftime
 llvm::Value *emitLoadALUSource(const ebpf_inst &inst, llvm::Value **regs,
 			       llvm::IRBuilder<> &builder)
 {
-	int srcTy = inst.code & 0x08;
-	int code = inst.code & 0xf0;
+	int srcTy = inst.opcode & 0x08;
+	int code = inst.opcode & 0xf0;
 	llvm::Value *src_val;
-	if ((inst.code & 0x07) == EBPF_CLS_ALU64) {
+	if ((inst.opcode & 0x07) == EBPF_CLS_ALU64) {
 		if (srcTy == EBPF_SRC_IMM) {
 			src_val =
 				builder.getInt64((uint64_t)((int64_t)inst.imm));
 		} else {
 			src_val = builder.CreateLoad(builder.getInt64Ty(),
-						     regs[inst.src_reg]);
+						     regs[inst.src]);
 		}
 	} else {
 		if (srcTy == EBPF_SRC_IMM) {
@@ -25,7 +25,7 @@ llvm::Value *emitLoadALUSource(const ebpf_inst &inst, llvm::Value **regs,
 			// truncate them
 			src_val = builder.CreateTrunc(
 				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[inst.src_reg]),
+						   regs[inst.src]),
 				builder.getInt32Ty());
 		}
 	}
@@ -35,26 +35,26 @@ llvm::Value *emitLoadALUSource(const ebpf_inst &inst, llvm::Value **regs,
 llvm::Value *emitLoadALUDest(const ebpf_inst &inst, llvm::Value **regs,
 			     llvm::IRBuilder<> &builder, bool dstAlways64)
 {
-	if (((inst.code & 0x07) == EBPF_CLS_ALU64) || dstAlways64) {
+	if (((inst.opcode & 0x07) == EBPF_CLS_ALU64) || dstAlways64) {
 		return builder.CreateLoad(builder.getInt64Ty(),
-					  regs[inst.dst_reg]);
+					  regs[inst.dst]);
 	} else {
 		return builder.CreateLoad(builder.getInt32Ty(),
-					  regs[inst.dst_reg]);
+					  regs[inst.dst]);
 	}
 }
 
 void emitStoreALUResult(const ebpf_inst &inst, llvm::Value **regs,
 			llvm::IRBuilder<> &builder, llvm::Value *result)
 {
-	if ((inst.code & 0x07) == EBPF_CLS_ALU64) {
-		builder.CreateStore(result, regs[inst.dst_reg]);
+	if ((inst.opcode & 0x07) == EBPF_CLS_ALU64) {
+		builder.CreateStore(result, regs[inst.dst]);
 	} else {
 		// For 32-bit ALU operations, clear the
 		// upper 32bits of the 64-bit register
 		builder.CreateStore(builder.CreateZExt(result,
 						       builder.getInt64Ty()),
-				    regs[inst.dst_reg]);
+				    regs[inst.dst]);
 	}
 }
 llvm::Expected<llvm::Value *>
@@ -63,7 +63,7 @@ emitALUEndianConversion(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 {
 	// TODO: Support 64bit conversion
 	//  Convert to big endian
-	if ((inst.code & 0x08) == 0x08) {
+	if ((inst.opcode & 0x08) == 0x08) {
 		// Split bytes of the dst register
 		std::vector<llvm::Value *> bytes;
 		if (inst.imm != 16 && inst.imm != 32 && inst.imm != 64) {
@@ -119,9 +119,9 @@ void emitALUWithDstAndSrc(
 llvm::Value *emitStoreLoadingSrc(const ebpf_inst &inst,
 				 llvm::IRBuilder<> &builder, llvm::Value **regs)
 {
-	if ((inst.code & 0x07) == EBPF_CLS_STX) {
+	if ((inst.opcode & 0x07) == EBPF_CLS_STX) {
 		return builder.CreateLoad(builder.getInt64Ty(),
-					  regs[inst.src_reg]);
+					  regs[inst.src]);
 	} else {
 		return builder.getInt64(inst.imm);
 	}
@@ -134,8 +134,8 @@ void emitStoreWritingResult(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 		result,
 		builder.CreateGEP(builder.getInt8Ty(),
 				  builder.CreateLoad(builder.getPtrTy(),
-						     regs[inst.dst_reg]),
-				  { builder.getInt64(inst.off) }));
+						     regs[inst.dst]),
+				  { builder.getInt64(inst.offset) }));
 }
 
 void emitStore(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
@@ -152,30 +152,30 @@ std::tuple<llvm::Value *, llvm::Value *, llvm::Value *>
 emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 			    llvm::IRBuilder<> &builder)
 {
-	int regSrc = (inst.code & 0x8) == 0x8;
+	int regSrc = (inst.opcode & 0x8) == 0x8;
 	using namespace llvm;
 	Value *src, *dst, *zero;
-	if ((inst.code & 0x07) == 0x06) {
+	if ((inst.opcode & 0x07) == 0x06) {
 		// JMP32
 		if (regSrc) {
 			src = builder.CreateLoad(builder.getInt32Ty(),
-						 regs[inst.src_reg]);
+						 regs[inst.src]);
 		} else {
 			src = builder.getInt32(inst.imm);
 		}
 		dst = builder.CreateLoad(builder.getInt32Ty(),
-					 regs[inst.dst_reg]);
+					 regs[inst.dst]);
 		zero = builder.getInt32(0);
 	} else {
 		// JMP64
 		if (regSrc) {
 			src = builder.CreateLoad(builder.getInt64Ty(),
-						 regs[inst.src_reg]);
+						 regs[inst.src]);
 		} else {
 			src = builder.getInt64(inst.imm);
 		}
 		dst = builder.CreateLoad(builder.getInt64Ty(),
-					 regs[inst.dst_reg]);
+					 regs[inst.dst]);
 		zero = builder.getInt64(0);
 	}
 	return { src, dst, zero };
@@ -185,8 +185,8 @@ llvm::Expected<llvm::BasicBlock *>
 loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
 		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
 {
-	SPDLOG_TRACE("pc {} request jump to {}", pc, pc + 1 + inst.off);
-	uint16_t dstBlkId = pc + 1 + inst.off;
+	SPDLOG_TRACE("pc {} request jump to {}", pc, pc + 1 + inst.offset);
+	uint16_t dstBlkId = pc + 1 + inst.offset;
 	if (auto itr = instBlocks.find(dstBlkId); itr != instBlocks.end()) {
 		return itr->second;
 	} else {
@@ -251,8 +251,8 @@ llvm::Value *emitLDXLoadingAddr(llvm::IRBuilder<> &builder, llvm::Value **regs,
 	// [rX + OFFSET]
 	return builder.CreateGEP(builder.getInt8Ty(),
 				 builder.CreateLoad(builder.getPtrTy(),
-						    regs[inst.src_reg]),
-				 { builder.getInt64(inst.off) });
+						    regs[inst.src]),
+				 { builder.getInt64(inst.offset) });
 }
 
 void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
@@ -261,7 +261,7 @@ void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
 	// Extend the loaded value to 64bits, then store it into
 	// the register
 	builder.CreateStore(builder.CreateZExt(result, builder.getInt64Ty()),
-			    regs[inst.dst_reg]);
+			    regs[inst.dst]);
 }
 
 void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
@@ -336,17 +336,17 @@ void emitAtomicBinOp(llvm::IRBuilder<> &builder, llvm::Value **regs,
 		op,
 		builder.CreateGEP(builder.getInt8Ty(),
 				  builder.CreateLoad(builder.getPtrTy(),
-						     regs[inst.dst_reg]),
-				  { builder.getInt64(inst.off) }),
+						     regs[inst.dst]),
+				  { builder.getInt64(inst.offset) }),
 		is64 ? builder.CreateLoad(builder.getInt64Ty(),
-					  regs[inst.src_reg]) :
+					  regs[inst.src]) :
 		       builder.CreateTrunc(
 			       builder.CreateLoad(builder.getInt64Ty(),
-						  regs[inst.src_reg]),
+						  regs[inst.src]),
 			       builder.getInt32Ty()),
 		llvm::MaybeAlign(32), llvm::AtomicOrdering::Monotonic);
 	if (is_fetch) {
-		builder.CreateStore(oldValue, regs[inst.src_reg]);
+		builder.CreateStore(oldValue, regs[inst.src]);
 	}
 }
 

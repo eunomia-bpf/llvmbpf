@@ -151,7 +151,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		}
 		if (is_jmp(curr)) {
 			SPDLOG_TRACE("mark {} block begin", i + curr.off + 1);
-			blockBegin[i + curr.off + 1] = true;
+			blockBegin[i + curr.offset + 1] = true;
 		}
 	}
 
@@ -229,8 +229,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				// Indicating that these block is the next
 				// instruction of a local func call
 				if (i > 1 &&
-				    insts[i - 1].code == EBPF_OP_CALL &&
-				    insts[i - 1].src_reg == 0x01) {
+				    insts[i - 1].opcode == EBPF_OP_CALL &&
+				    insts[i - 1].src == 0x01) {
 					auto blockAddr =
 						llvm::BlockAddress::get(
 							bpf_func, currBlk);
@@ -315,13 +315,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		}
 		builder.SetInsertPoint(currBB);
 		// Precheck for registers
-		if (inst.dst_reg > 10 || inst.src_reg > 10) {
+		if (inst.dst > 10 || inst.src > 10) {
 			return llvm::make_error<llvm::StringError>(
 				"Illegal src reg/dst reg at pc " +
 					std::to_string(pc),
 				llvm::inconvertibleErrorCode());
 		}
-		switch (inst.code) {
+		switch (inst.opcode) {
 			// ALU
 		case EBPF_OP_ADD64_IMM:
 		case EBPF_OP_ADD_IMM:
@@ -371,7 +371,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			emitALUWithDstAndSrc(
 				inst, builder, &regs[0],
 				[&](Value *dst_val, Value *src_val) {
-					bool is64 = (inst.code & 0x07) ==
+					bool is64 = (inst.opcode & 0x07) ==
 						    EBPF_CLS_ALU64;
 					auto result = builder.CreateSelect(
 						builder.CreateICmpEQ(
@@ -600,8 +600,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		case EBPF_OP_LDDW: {
 			// ubpf only supports EBPF_OP_LDDW in instruction class
 			// EBPF_CLS_LD, so do us
-			auto size = inst.code & 0x18;
-			auto mode = inst.code & 0xe0;
+			auto size = inst.opcode & 0x18;
+			auto mode = inst.opcode & 0xe0;
 			if (size != 0x18 || mode != 0x00) {
 				return llvm::make_error<llvm::StringError>(
 					"Unsupported size (" +
@@ -618,9 +618,9 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						" which requires an extra pseudo instruction, but it's the last instruction",
 					llvm::inconvertibleErrorCode());
 			}
-			const auto &nextInst = insts[pc + 1];
-			if (nextInst.code || nextInst.dst_reg ||
-			    nextInst.src_reg || nextInst.off) {
+			const auto &nextinst = insts[pc + 1];
+			if (nextinst.opcode || nextinst.dst ||
+			    nextinst.src || nextinst.offset) {
 				return llvm::make_error<llvm::StringError>(
 					"Loaded LDDW at pc=" +
 						std::to_string(pc) +
@@ -629,17 +629,17 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			}
 			uint64_t val =
 				(uint64_t)((uint32_t)inst.imm) |
-				(((uint64_t)((uint32_t)nextInst.imm)) << 32);
+				(((uint64_t)((uint32_t)nextinst.imm)) << 32);
 			pc++;
 
 			SPDLOG_DEBUG("Load LDDW val= {} part1={:x} part2={:x}",
 				     val, (uint64_t)inst.imm,
-				     (uint64_t)nextInst.imm);
-			if (inst.src_reg == 0) {
+				     (uint64_t)nextinst.imm);
+			if (inst.src == 0) {
 				SPDLOG_DEBUG("Emit lddw helper 0 at pc {}", pc);
 				builder.CreateStore(builder.getInt64(val),
-						    regs[inst.dst_reg]);
-			} else if (inst.src_reg == 1) {
+						    regs[inst.dst]);
+			} else if (inst.src == 1) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 1 (map_by_fd) at pc {}, imm={}, patched at compile time",
 					pc, inst.imm);
@@ -647,7 +647,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateStore(
 						builder.getInt64(
 							vm.map_by_fd(inst.imm)),
-						regs[inst.dst_reg]);
+						regs[inst.dst]);
 				} else {
 					SPDLOG_INFO(
 						"map_by_fd is called in eBPF code, but is not provided, will use the default behavior");
@@ -655,13 +655,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateStore(
 						builder.getInt64(
 							(int64_t)inst.imm),
-						regs[inst.dst_reg]);
+						regs[inst.dst]);
 				}
 
-			} else if (inst.src_reg == 2) {
+			} else if (inst.src == 2) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 2 (map_by_fd + map_val) at pc {}, imm1={}, imm2={}",
-					pc, inst.imm, nextInst.imm);
+					pc, inst.imm, nextinst.imm);
 				uint64_t mapPtr;
 				if (vm.map_by_fd) {
 					mapPtr = vm.map_by_fd(inst.imm);
@@ -683,8 +683,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateStore(
 						builder.getInt64(
 							vm.map_val(mapPtr) +
-							nextInst.imm),
-						regs[inst.dst_reg]);
+							nextinst.imm),
+						regs[inst.dst]);
 				} else {
 					SPDLOG_DEBUG(
 						"map_val is required to be evaluated at runtime, emitting calling instructions");
@@ -700,10 +700,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						auto finalRet = builder.CreateAdd(
 							retMapVal,
 							builder.getInt64(
-								nextInst.imm));
+								nextinst.imm));
 						builder.CreateStore(
 							finalRet,
-							regs[inst.dst_reg]);
+							regs[inst.dst]);
 
 					} else {
 						return llvm::make_error<
@@ -713,7 +713,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					}
 				}
 
-			} else if (inst.src_reg == 3) {
+			} else if (inst.src == 3) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 3 (var_addr) at pc {}, imm1={}",
 					pc, inst.imm);
@@ -725,8 +725,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				}
 				builder.CreateStore(
 					builder.getInt64(vm.var_addr(inst.imm)),
-					regs[inst.dst_reg]);
-			} else if (inst.src_reg == 4) {
+					regs[inst.dst]);
+			} else if (inst.src == 4) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (code_addr) at pc {}, imm1={}",
 					pc, inst.imm);
@@ -739,8 +739,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				builder.CreateStore(
 					builder.getInt64(
 						vm.code_addr(inst.imm)),
-					regs[inst.dst_reg]);
-			} else if (inst.src_reg == 5) {
+					regs[inst.dst]);
+			} else if (inst.src == 5) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (map_by_idx) at pc {}, imm1={}",
 					pc, inst.imm);
@@ -748,7 +748,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateStore(
 						builder.getInt64(vm.map_by_idx(
 							inst.imm)),
-						regs[inst.dst_reg]);
+						regs[inst.dst]);
 				} else {
 					SPDLOG_INFO(
 						"map_by_idx is called in eBPF code, but it's not provided, will use the default behavior");
@@ -756,13 +756,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateStore(
 						builder.getInt64(
 							(int64_t)inst.imm),
-						regs[inst.dst_reg]);
+						regs[inst.dst]);
 				}
 
-			} else if (inst.src_reg == 6) {
+			} else if (inst.src == 6) {
 				SPDLOG_DEBUG(
 					"Emit lddw helper 6 (map_by_idx + map_val) at pc {}, imm1={}, imm2={}",
-					pc, inst.imm, nextInst.imm);
+					pc, inst.imm, nextinst.imm);
 
 				uint64_t mapPtr;
 				if (vm.map_by_idx) {
@@ -781,8 +781,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 							builder.getInt64(
 								vm.map_val(
 									mapPtr) +
-								nextInst.imm),
-							regs[inst.dst_reg]);
+								nextinst.imm),
+							regs[inst.dst]);
 					} else {
 						return llvm::make_error<
 							llvm::StringError>(
@@ -804,10 +804,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						auto finalRet = builder.CreateAdd(
 							retMapVal,
 							builder.getInt64(
-								nextInst.imm));
+								nextinst.imm));
 						builder.CreateStore(
 							finalRet,
-							regs[inst.dst_reg]);
+							regs[inst.dst]);
 
 					} else {
 						return llvm::make_error<
@@ -836,7 +836,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			// that we don't support
 		case EBPF_OP_CALL | 0x8: {
 			// Call local function
-			if (inst.src_reg == 0x1) {
+			if (inst.src == 0x1) {
 				// Each call will put five 8byte integer
 				// onto the call stack the most top one
 				// is the return address, followed by
@@ -1051,58 +1051,58 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		case EBPF_ATOMIC_OPCODE_64: {
 			switch (inst.imm) {
 			case EBPF_ATOMIC_ADD:
-			case EBPF_ATOMIC_ADD | EBPF_FETCH: {
+			case EBPF_ATOMIC_ADD | EBPF_ATOMIC_OP_FETCH: {
 				emitAtomicBinOp(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Add, inst,
-					inst.code == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_FETCH) == EBPF_FETCH);
+					inst.opcode == EBPF_ATOMIC_OPCODE_64,
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 
 			case EBPF_ATOMIC_AND:
-			case EBPF_ATOMIC_AND | EBPF_FETCH: {
+			case EBPF_ATOMIC_AND | EBPF_ATOMIC_OP_FETCH: {
 				emitAtomicBinOp(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::And, inst,
-					inst.code == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_FETCH) == EBPF_FETCH);
+					inst.opcode == EBPF_ATOMIC_OPCODE_64,
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 
 			case EBPF_ATOMIC_OR:
-			case EBPF_ATOMIC_OR | EBPF_FETCH: {
+			case EBPF_ATOMIC_OR | EBPF_ATOMIC_OP_FETCH: {
 				emitAtomicBinOp(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Or, inst,
-					inst.code == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_FETCH) == EBPF_FETCH);
+					inst.opcode == EBPF_ATOMIC_OPCODE_64,
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 			case EBPF_ATOMIC_XOR:
-			case EBPF_ATOMIC_XOR | EBPF_FETCH: {
+			case EBPF_ATOMIC_XOR | EBPF_ATOMIC_OP_FETCH: {
 				emitAtomicBinOp(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Xor, inst,
-					inst.code == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_FETCH) == EBPF_FETCH);
+					inst.opcode == EBPF_ATOMIC_OPCODE_64,
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
-			case EBPF_XCHG: {
+			case EBPF_ATOMIC_OP_XCHG: {
 				emitAtomicBinOp(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Xchg, inst,
-					inst.code == EBPF_ATOMIC_OPCODE_64,
+					inst.opcode == EBPF_ATOMIC_OPCODE_64,
 					false);
 				break;
 			}
-			case EBPF_CMPXCHG: {
-				bool is64 = inst.code == EBPF_ATOMIC_OPCODE_64;
+			case EBPF_ATOMIC_OP_CMPXCHG: {
+				bool is64 = inst.opcode == EBPF_ATOMIC_OPCODE_64;
 				auto vPtr = builder.CreateGEP(
 					builder.getInt8Ty(),
 					builder.CreateLoad(builder.getPtrTy(),
-							   regs[inst.dst_reg]),
-					{ builder.getInt64(inst.off) });
+							   regs[inst.dst]),
+					{ builder.getInt64(inst.offset) });
 				auto beforeVal = builder.CreateLoad(
 					is64 ? builder.getInt64Ty() :
 					       builder.getInt32Ty(),
@@ -1116,7 +1116,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder.CreateLoad(
 						is64 ? builder.getInt64Ty() :
 						       builder.getInt32Ty(),
-						regs[inst.src_reg]),
+						regs[inst.src]),
 					MaybeAlign(0),
 					AtomicOrdering::Monotonic,
 					AtomicOrdering::Monotonic);
@@ -1138,7 +1138,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		default:
 			return llvm::make_error<llvm::StringError>(
 				"Unsupported or illegal opcode: " +
-					std::to_string(inst.code),
+					std::to_string(inst.opcode),
 				llvm::inconvertibleErrorCode());
 		}
 	}

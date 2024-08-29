@@ -13,5 +13,4 @@ test.o
 test.bin
 *.ll
 bpf_conformance
-
-
+coverage.info

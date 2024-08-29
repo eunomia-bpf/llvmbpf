@@ -11,7 +11,7 @@ if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT TARGET Catch2)
 endif()
 
 set(TEST_SOURCES
-    llvm-aot.cpp
+    bpf_prog_test.cpp
 )
 
 add_executable(llvm_jit_tests ${TEST_SOURCES})

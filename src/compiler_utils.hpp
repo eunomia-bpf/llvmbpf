@@ -28,8 +28,8 @@ namespace bpftime
 
 static inline bool is_jmp(const ebpf_inst &insn)
 {
-	return (insn.code & 0x07) == EBPF_CLS_JMP ||
-	       (insn.code & 0x07) == EBPF_CLS_JMP32;
+	return (insn.opcode & 0x07) == EBPF_CLS_JMP ||
+	       (insn.opcode & 0x07) == EBPF_CLS_JMP32;
 }
 static inline std::string ext_func_sym(uint32_t idx)
 {
@@ -40,7 +40,7 @@ static inline std::string ext_func_sym(uint32_t idx)
 
 static inline bool is_alu64(const ebpf_inst &insn)
 {
-	return (insn.code & 0x07) == EBPF_CLS_ALU64;
+	return (insn.opcode & 0x07) == EBPF_CLS_ALU64;
 }
 
 /// Get the source representation of certain ALU operands

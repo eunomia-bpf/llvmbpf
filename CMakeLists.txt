@@ -108,6 +108,12 @@ target_include_directories(llvmbpf_vm
 )
 add_dependencies(llvmbpf_vm spdlog::spdlog)
 
+if(BPFTIME_ENABLE_CODE_COVERAGE)
+    target_compile_options(llvmbpf_vm PUBLIC -O0 -g -fprofile-arcs -ftest-coverage)
+    target_link_options(llvmbpf_vm PUBLIC -fprofile-arcs -ftest-coverage)
+    message(DEBUG "Code coverage is enabled and provided with GCC.")
+endif()
+
 if(BPFTIME_ENABLE_UNIT_TESTING)
     message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")
     add_subdirectory(test)

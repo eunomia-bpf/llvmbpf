@@ -1,5 +1,7 @@
 # Userspace eBPF VM with LLVM JIT/AOT Compiler
 
+[![Build and Test VM](https://github.com/eunomia-bpf/llvmbpf/actions/workflows/test-vm.yml/badge.svg)](https://github.com/eunomia-bpf/llvmbpf/actions/workflows/test-vm.yml)
+
 A high-performance, multi-architecture JIT/AOT compiler and virtual machine (VM) based on LLVM.
 
 This component is part of the [bpftime](https://github.com/eunomia-bpf/bpftime) project but focuses solely on the core VM. It offers the following capabilities:

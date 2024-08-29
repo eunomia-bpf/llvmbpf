@@ -48,7 +48,7 @@ jobs:
       with:
         python-version: '3.8'
 
-    - name: build
+    - name: build debug
       run: 
            |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -G Ninja
@@ -62,3 +62,8 @@ jobs:
         pip install -r test/requirements.txt
         # make build # or build-arm32 build-arm64
         pytest -v -s test/test_framework
+
+    - name: build llvm JIT/AOT release as a standalone library
+      run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja &&\
+          cmake --build build --target all -j

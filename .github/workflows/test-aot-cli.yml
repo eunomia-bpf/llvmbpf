@@ -34,7 +34,7 @@ jobs:
       run:
         dnf install -y ninja-build
         
-    
+  
     - name: Build and install everything
       run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBUILD_LLVM_AOT_CLI=1 -G Ninja

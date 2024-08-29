@@ -30,11 +30,6 @@ jobs:
       run: |
         ./build/test/unit-test/llvm_jit_tests
 
-    - name: build llvm JIT/AOT release as a standalone library
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja &&\
-        cmake --build build --target all -j
-   
     - name: upload coverage
       run: |
         lcov --capture --directory . --output-file coverage.info

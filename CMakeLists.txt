@@ -85,16 +85,18 @@ else()
         add_subdirectory(cli)
     endif()
 
-    if(${BPFTIME_ENABLE_UNIT_TESTING} AND NOT TARGET Catch2)
-        message(STATUS "Adding Catch2 by FetchContent at llvmbpf")
-        FetchContent_Declare(
-            Catch2
-            GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-            GIT_TAG v3.4.0 # Specify the version you want to use
-        )
+    if(${BPFTIME_ENABLE_UNIT_TESTING})
+        if (NOT TARGET Catch2)
+            message(STATUS "Adding Catch2 by FetchContent at llvmbpf")
+            FetchContent_Declare(
+                Catch2
+                GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+                GIT_TAG v3.4.0 # Specify the version you want to use
+            )
 
-        # Make the Catch2 target available
-        FetchContent_MakeAvailable(Catch2)
+            # Make the Catch2 target available
+            FetchContent_MakeAvailable(Catch2)
+        endif()
     endif()
 endif()
 

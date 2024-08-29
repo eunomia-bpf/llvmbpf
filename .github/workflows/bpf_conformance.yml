@@ -22,7 +22,7 @@ jobs:
     - name: build
       run: 
            |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 
+          LLVM_DIR=/usr/lib/llvm-15/cmake cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 
           cmake --build build --target all -j
 
     - name: get bpf_conformance

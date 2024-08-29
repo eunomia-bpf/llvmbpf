@@ -5,40 +5,21 @@ on:
     branches: "main"
   pull_request: 
     branches: "main"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
 jobs:
   build:
-    strategy:
-      matrix:
-        container:
-          - ubuntu-2204
-          - fedora-39
-    runs-on: ubuntu-22.04
-    container: 
-      image: "manjusakalza/bpftime-base-image:${{matrix.container}}"
-      options: --privileged
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
 
-    - name: Install Ninja (Ubuntu)
-      if: ${{matrix.container == 'ubuntu-2204'}}
-      run:
-        apt install ninja-build
-
-    - name: Install Ninja (Fedora)
-      if: ${{matrix.container == 'fedora-39'}}
-      run:
-        dnf install -y ninja-build
-        
-  
+    - name: Install Ninja and lcov (Ubuntu)
+      run: apt install -y ninja-build lcov
+    
     - name: build
-      run: 
+      run:
            |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -G Ninja
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 -G Ninja
           cmake --build build --target all -j
 
     - name: Run example
@@ -54,3 +35,9 @@ jobs:
         cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja &&\
         cmake --build build --target all -j
    
+    - name: upload coverage
+      run: |
+        lcov --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter system-files
+        lcov --list coverage.info # debug info
+        bash <(curl -s https://codecov.io/bash) -f coverage.info || echo "Codecov did not collect coverage reports"

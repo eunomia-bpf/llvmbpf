@@ -11,13 +11,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        container:
-          - ubuntu-2204
-    container: 
-      image: "manjusakalza/bpftime-base-image:${{matrix.container}}"
-      options: --privileged
     steps:
 
     - name: cache dependencies
@@ -51,11 +44,10 @@ jobs:
 
     - name: test bpf_conformance
       run: |
-        cd bpf_conformance
-        ./build/bin/bpf_conformance_runner  --test_file_directory \
-        tests --plugin_path \
-        ../build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
-        > ../bpf_conformance_results.txt  || echo "ok"
+        ./bpf_conformance/build/bin/bpf_conformance_runner  --test_file_directory \
+        ./bpf_conformance/tests --plugin_path \
+        build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
+        > bpf_conformance_results.txt  || echo "ok"
 
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3

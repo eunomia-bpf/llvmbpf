@@ -39,7 +39,7 @@ jobs:
         ./bpf_conformance/tests --plugin_path \
         build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
         > bpf_conformance_results.txt  || echo "ok"
-        diff ./github/assets/bpf_conformance_test.txt bpf_conformance_results.txt 
+        diff ./.github/assets/bpf_conformance_test.txt bpf_conformance_results.txt 
 
     - name: upload coverage
       run: |

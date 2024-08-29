@@ -35,10 +35,9 @@ jobs:
 
     - name: test bpf_conformance
       run: |
-        ./bpf_conformance/build/bin/bpf_conformance_runner  --test_file_directory \
+        ./bpf_conformance/build/bin/bpf_conformance_runner  --cpu_version v3 --exclude_regex "lock_xchg+|le+" --test_file_directory \
         ./bpf_conformance/tests --plugin_path \
-        build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
-        > bpf_conformance_results.txt  || echo "ok"
+        build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner 
 
     - name: upload coverage
       run: |

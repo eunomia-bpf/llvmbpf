@@ -1,4 +1,4 @@
-name: Build and Test VM input and output
+name: Build and Test VM
 
 on:
   push:

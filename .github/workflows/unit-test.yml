@@ -40,5 +40,6 @@ jobs:
       with:
           fail_ci_if_error: true # optional (default = false)
           files: ./coverage.info # optional
+          flags: unittests
           token: ${{ secrets.CODECOV_TOKEN }} # required
           verbose: true # optional (default = false)

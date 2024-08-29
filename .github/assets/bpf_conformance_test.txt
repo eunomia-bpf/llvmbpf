@@ -1,0 +1,414 @@
+Test "tests/add.data" succeeded
+Test "tests/add64.data" succeeded
+Test "tests/alu-arith.data" succeeded
+Test "tests/alu-bit.data" succeeded
+Test "tests/alu64-arith.data" succeeded
+Test "tests/alu64-bit.data" succeeded
+Test "tests/arsh32-imm-high.data" succeeded
+Test "tests/arsh32-imm-neg.data" succeeded
+Test "tests/arsh32-imm.data" succeeded
+Test "tests/arsh32-reg-high.data" succeeded
+Test "tests/arsh32-reg-neg.data" succeeded
+Test "tests/arsh32-reg.data" succeeded
+Test "tests/arsh64-imm-high.data" succeeded
+Test "tests/arsh64-imm-neg.data" succeeded
+Test "tests/arsh64-imm.data" succeeded
+Test "tests/arsh64-reg-high.data" succeeded
+Test "tests/arsh64-reg-neg.data" succeeded
+Test "tests/arsh64-reg.data" succeeded
+Test "tests/be16-high.data" succeeded
+Test "tests/be16.data" succeeded
+Test "tests/be32-high.data" succeeded
+Test "tests/be32.data" succeeded
+Test "tests/be64.data" succeeded
+Test "tests/call_local.data" succeeded
+Test "tests/call_unwind_fail.data" succeeded
+Test "tests/callx.data" skipped: Test file contains unsupported instructions.
+Test "tests/div32-by-zero-reg-2.data" succeeded
+Test "tests/div32-by-zero-reg.data" succeeded
+Test "tests/div32-high-divisor.data" succeeded
+Test "tests/div32-imm.data" succeeded
+Test "tests/div32-reg.data" succeeded
+Test "tests/div64-by-zero-reg.data" succeeded
+Test "tests/div64-imm.data" succeeded
+Test "tests/div64-negative-imm.data" succeeded
+Test "tests/div64-negative-reg.data" succeeded
+Test "tests/div64-reg.data" succeeded
+Test "tests/exit-not-last.data" succeeded
+Test "tests/exit.data" succeeded
+Test "tests/j-signed-imm.data" succeeded
+Test "tests/ja32.data" skipped: Test file contains unsupported instructions.
+Test "tests/jeq-imm.data" succeeded
+Test "tests/jeq-reg.data" succeeded
+Test "tests/jeq32-imm.data" succeeded
+Test "tests/jeq32-reg.data" succeeded
+Test "tests/jge-imm.data" succeeded
+Test "tests/jge-reg.data" succeeded
+Test "tests/jge32-imm.data" succeeded
+Test "tests/jge32-reg.data" succeeded
+Test "tests/jgt-imm.data" succeeded
+Test "tests/jgt-reg.data" succeeded
+Test "tests/jgt32-imm.data" succeeded
+Test "tests/jgt32-reg.data" succeeded
+Test "tests/jit-bounce.data" succeeded
+Test "tests/jle-imm.data" succeeded
+Test "tests/jle-reg.data" succeeded
+Test "tests/jle32-imm.data" succeeded
+Test "tests/jle32-reg.data" succeeded
+Test "tests/jlt-imm.data" succeeded
+Test "tests/jlt-reg.data" succeeded
+Test "tests/jlt32-imm.data" succeeded
+Test "tests/jlt32-reg.data" succeeded
+Test "tests/jne-reg.data" succeeded
+Test "tests/jne32-imm.data" succeeded
+Test "tests/jne32-reg.data" succeeded
+Test "tests/jset-imm.data" succeeded
+Test "tests/jset-reg.data" succeeded
+Test "tests/jset32-imm.data" succeeded
+Test "tests/jset32-reg.data" succeeded
+Test "tests/jsge-imm.data" succeeded
+Test "tests/jsge-reg.data" succeeded
+Test "tests/jsge32-imm.data" succeeded
+Test "tests/jsge32-reg.data" succeeded
+Test "tests/jsgt-imm.data" succeeded
+Test "tests/jsgt-reg.data" succeeded
+Test "tests/jsgt32-imm.data" succeeded
+Test "tests/jsgt32-reg.data" succeeded
+Test "tests/jsle-imm.data" succeeded
+Test "tests/jsle-reg.data" succeeded
+Test "tests/jsle32-imm.data" succeeded
+Test "tests/jsle32-reg.data" succeeded
+Test "tests/jslt-imm.data" succeeded
+Test "tests/jslt-reg.data" succeeded
+Test "tests/jslt32-imm.data" succeeded
+Test "tests/jslt32-reg.data" succeeded
+Test "tests/lddw.data" succeeded
+Test "tests/lddw2.data" succeeded
+Test "tests/ldxb-all.data" succeeded
+Test "tests/ldxb.data" succeeded
+Test "tests/ldxdw.data" succeeded
+Test "tests/ldxh-all.data" succeeded
+Test "tests/ldxh-all2.data" succeeded
+Test "tests/ldxh-same-reg.data" succeeded
+Test "tests/ldxh.data" succeeded
+Test "tests/ldxw-all.data" succeeded
+Test "tests/ldxw.data" succeeded
+Test "tests/le16-high.data" failed: Plugin returned incorrect return value 13532434998891647266 expected 4386
+Test "tests/le16.data" succeeded
+Test "tests/le32-high.data" failed: Plugin returned incorrect return value 15991999702591746884 expected 287454020
+Test "tests/le32.data" succeeded
+Test "tests/le64.data" succeeded
+Test "tests/lock_add.data" succeeded
+Test "tests/lock_add32.data" succeeded
+Test "tests/lock_and.data" succeeded
+Test "tests/lock_and32.data" succeeded
+Test "tests/lock_cmpxchg.data" succeeded
+Test "tests/lock_cmpxchg32.data" succeeded
+Test "tests/lock_fetch_add.data" succeeded
+Test "tests/lock_fetch_add32.data" succeeded
+Test "tests/lock_fetch_and.data" succeeded
+Test "tests/lock_fetch_and32.data" succeeded
+Test "tests/lock_fetch_or.data" succeeded
+Test "tests/lock_fetch_or32.data" succeeded
+Test "tests/lock_fetch_xor.data" succeeded
+Test "tests/lock_fetch_xor32.data" succeeded
+Test "tests/lock_or.data" succeeded
+Test "tests/lock_or32.data" succeeded
+Test "tests/lock_xchg.data" failed: Plugin returned incorrect return value 1229782938247303441 expected 0
+Test "tests/lock_xchg32.data" failed: Plugin returned incorrect return value 286331153 expected 0
+Test "tests/lock_xor.data" succeeded
+Test "tests/lock_xor32.data" succeeded
+Test "tests/lsh32-imm-high.data" succeeded
+Test "tests/lsh32-imm-neg.data" succeeded
+Test "tests/lsh32-imm.data" succeeded
+Test "tests/lsh32-reg-high.data" succeeded
+Test "tests/lsh32-reg-neg.data" succeeded
+Test "tests/lsh32-reg.data" succeeded
+Test "tests/lsh64-imm-high.data" succeeded
+Test "tests/lsh64-imm-neg.data" succeeded
+Test "tests/lsh64-imm.data" succeeded
+Test "tests/lsh64-reg-high.data" succeeded
+Test "tests/lsh64-reg-neg.data" succeeded
+Test "tests/lsh64-reg.data" succeeded
+Test "tests/mem-len.data" succeeded
+Test "tests/mod-by-zero-reg.data" succeeded
+Test "tests/mod.data" succeeded
+Test "tests/mod32.data" succeeded
+Test "tests/mod64-by-zero-reg.data" succeeded
+Test "tests/mod64.data" succeeded
+Test "tests/mov.data" succeeded
+Test "tests/mov64-sign-extend.data" succeeded
+Test "tests/mov64.data" succeeded
+Test "tests/movsx1632-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/movsx1664-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/movsx3264-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/movsx832-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/movsx864-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/mul32-imm.data" succeeded
+Test "tests/mul32-reg-overflow.data" succeeded
+Test "tests/mul32-reg.data" succeeded
+Test "tests/mul64-imm.data" succeeded
+Test "tests/mul64-reg.data" succeeded
+Test "tests/neg.data" succeeded
+Test "tests/neg64.data" succeeded
+Test "tests/prime.data" succeeded
+Test "tests/rsh32-imm-high.data" succeeded
+Test "tests/rsh32-imm-neg.data" succeeded
+Test "tests/rsh32-imm.data" succeeded
+Test "tests/rsh32-reg-high.data" succeeded
+Test "tests/rsh32-reg-neg.data" succeeded
+Test "tests/rsh32-reg.data" succeeded
+Test "tests/rsh64-imm-high.data" succeeded
+Test "tests/rsh64-imm-neg.data" succeeded
+Test "tests/rsh64-imm.data" succeeded
+Test "tests/rsh64-reg-high.data" succeeded
+Test "tests/rsh64-reg-neg.data" succeeded
+Test "tests/rsh64-reg.data" succeeded
+Test "tests/sdiv32-by-zero-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv32-by-zero-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv32-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv32-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv64-by-zero-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv64-by-zero-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv64-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/sdiv64-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-neg-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-neg-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-pos-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-pos-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-zero-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-neg-by-zero-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-pos-by-neg-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod32-pos-by-neg-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-neg-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-neg-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-pos-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-pos-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-zero-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-neg-by-zero-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-pos-by-neg-imm.data" skipped: Test file contains unsupported instructions.
+Test "tests/smod64-pos-by-neg-reg.data" skipped: Test file contains unsupported instructions.
+Test "tests/stack.data" succeeded
+Test "tests/stb.data" succeeded
+Test "tests/stdw.data" succeeded
+Test "tests/sth.data" succeeded
+Test "tests/stw.data" succeeded
+Test "tests/stxb-all.data" succeeded
+Test "tests/stxb-all2.data" succeeded
+Test "tests/stxb-chain.data" succeeded
+Test "tests/stxb.data" succeeded
+Test "tests/stxdw.data" succeeded
+Test "tests/stxh.data" succeeded
+Test "tests/stxw.data" succeeded
+Test "tests/subnet.data" succeeded
+Test "tests/swap16.data" skipped: Test file contains unsupported instructions.
+Test "tests/swap32.data" skipped: Test file contains unsupported instructions.
+Test "tests/swap64.data" skipped: Test file contains unsupported instructions.
+Test results:
+PASS: "tests/add.data"
+PASS: "tests/add64.data"
+PASS: "tests/alu-arith.data"
+PASS: "tests/alu-bit.data"
+PASS: "tests/alu64-arith.data"
+PASS: "tests/alu64-bit.data"
+PASS: "tests/arsh32-imm-high.data"
+PASS: "tests/arsh32-imm-neg.data"
+PASS: "tests/arsh32-imm.data"
+PASS: "tests/arsh32-reg-high.data"
+PASS: "tests/arsh32-reg-neg.data"
+PASS: "tests/arsh32-reg.data"
+PASS: "tests/arsh64-imm-high.data"
+PASS: "tests/arsh64-imm-neg.data"
+PASS: "tests/arsh64-imm.data"
+PASS: "tests/arsh64-reg-high.data"
+PASS: "tests/arsh64-reg-neg.data"
+PASS: "tests/arsh64-reg.data"
+PASS: "tests/be16-high.data"
+PASS: "tests/be16.data"
+PASS: "tests/be32-high.data"
+PASS: "tests/be32.data"
+PASS: "tests/be64.data"
+PASS: "tests/call_local.data"
+PASS: "tests/call_unwind_fail.data"
+SKIP: "tests/callx.data" Test file contains unsupported instructions.
+PASS: "tests/div32-by-zero-reg-2.data"
+PASS: "tests/div32-by-zero-reg.data"
+PASS: "tests/div32-high-divisor.data"
+PASS: "tests/div32-imm.data"
+PASS: "tests/div32-reg.data"
+PASS: "tests/div64-by-zero-reg.data"
+PASS: "tests/div64-imm.data"
+PASS: "tests/div64-negative-imm.data"
+PASS: "tests/div64-negative-reg.data"
+PASS: "tests/div64-reg.data"
+PASS: "tests/exit-not-last.data"
+PASS: "tests/exit.data"
+PASS: "tests/j-signed-imm.data"
+SKIP: "tests/ja32.data" Test file contains unsupported instructions.
+PASS: "tests/jeq-imm.data"
+PASS: "tests/jeq-reg.data"
+PASS: "tests/jeq32-imm.data"
+PASS: "tests/jeq32-reg.data"
+PASS: "tests/jge-imm.data"
+PASS: "tests/jge-reg.data"
+PASS: "tests/jge32-imm.data"
+PASS: "tests/jge32-reg.data"
+PASS: "tests/jgt-imm.data"
+PASS: "tests/jgt-reg.data"
+PASS: "tests/jgt32-imm.data"
+PASS: "tests/jgt32-reg.data"
+PASS: "tests/jit-bounce.data"
+PASS: "tests/jle-imm.data"
+PASS: "tests/jle-reg.data"
+PASS: "tests/jle32-imm.data"
+PASS: "tests/jle32-reg.data"
+PASS: "tests/jlt-imm.data"
+PASS: "tests/jlt-reg.data"
+PASS: "tests/jlt32-imm.data"
+PASS: "tests/jlt32-reg.data"
+PASS: "tests/jne-reg.data"
+PASS: "tests/jne32-imm.data"
+PASS: "tests/jne32-reg.data"
+PASS: "tests/jset-imm.data"
+PASS: "tests/jset-reg.data"
+PASS: "tests/jset32-imm.data"
+PASS: "tests/jset32-reg.data"
+PASS: "tests/jsge-imm.data"
+PASS: "tests/jsge-reg.data"
+PASS: "tests/jsge32-imm.data"
+PASS: "tests/jsge32-reg.data"
+PASS: "tests/jsgt-imm.data"
+PASS: "tests/jsgt-reg.data"
+PASS: "tests/jsgt32-imm.data"
+PASS: "tests/jsgt32-reg.data"
+PASS: "tests/jsle-imm.data"
+PASS: "tests/jsle-reg.data"
+PASS: "tests/jsle32-imm.data"
+PASS: "tests/jsle32-reg.data"
+PASS: "tests/jslt-imm.data"
+PASS: "tests/jslt-reg.data"
+PASS: "tests/jslt32-imm.data"
+PASS: "tests/jslt32-reg.data"
+PASS: "tests/lddw.data"
+PASS: "tests/lddw2.data"
+PASS: "tests/ldxb-all.data"
+PASS: "tests/ldxb.data"
+PASS: "tests/ldxdw.data"
+PASS: "tests/ldxh-all.data"
+PASS: "tests/ldxh-all2.data"
+PASS: "tests/ldxh-same-reg.data"
+PASS: "tests/ldxh.data"
+PASS: "tests/ldxw-all.data"
+PASS: "tests/ldxw.data"
+FAIL: "tests/le16-high.data" Plugin returned incorrect return value 13532434998891647266 expected 4386
+PASS: "tests/le16.data"
+FAIL: "tests/le32-high.data" Plugin returned incorrect return value 15991999702591746884 expected 287454020
+PASS: "tests/le32.data"
+PASS: "tests/le64.data"
+PASS: "tests/lock_add.data"
+PASS: "tests/lock_add32.data"
+PASS: "tests/lock_and.data"
+PASS: "tests/lock_and32.data"
+PASS: "tests/lock_cmpxchg.data"
+PASS: "tests/lock_cmpxchg32.data"
+PASS: "tests/lock_fetch_add.data"
+PASS: "tests/lock_fetch_add32.data"
+PASS: "tests/lock_fetch_and.data"
+PASS: "tests/lock_fetch_and32.data"
+PASS: "tests/lock_fetch_or.data"
+PASS: "tests/lock_fetch_or32.data"
+PASS: "tests/lock_fetch_xor.data"
+PASS: "tests/lock_fetch_xor32.data"
+PASS: "tests/lock_or.data"
+PASS: "tests/lock_or32.data"
+FAIL: "tests/lock_xchg.data" Plugin returned incorrect return value 1229782938247303441 expected 0
+FAIL: "tests/lock_xchg32.data" Plugin returned incorrect return value 286331153 expected 0
+PASS: "tests/lock_xor.data"
+PASS: "tests/lock_xor32.data"
+PASS: "tests/lsh32-imm-high.data"
+PASS: "tests/lsh32-imm-neg.data"
+PASS: "tests/lsh32-imm.data"
+PASS: "tests/lsh32-reg-high.data"
+PASS: "tests/lsh32-reg-neg.data"
+PASS: "tests/lsh32-reg.data"
+PASS: "tests/lsh64-imm-high.data"
+PASS: "tests/lsh64-imm-neg.data"
+PASS: "tests/lsh64-imm.data"
+PASS: "tests/lsh64-reg-high.data"
+PASS: "tests/lsh64-reg-neg.data"
+PASS: "tests/lsh64-reg.data"
+PASS: "tests/mem-len.data"
+PASS: "tests/mod-by-zero-reg.data"
+PASS: "tests/mod.data"
+PASS: "tests/mod32.data"
+PASS: "tests/mod64-by-zero-reg.data"
+PASS: "tests/mod64.data"
+PASS: "tests/mov.data"
+PASS: "tests/mov64-sign-extend.data"
+PASS: "tests/mov64.data"
+SKIP: "tests/movsx1632-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/movsx1664-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/movsx3264-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/movsx832-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/movsx864-reg.data" Test file contains unsupported instructions.
+PASS: "tests/mul32-imm.data"
+PASS: "tests/mul32-reg-overflow.data"
+PASS: "tests/mul32-reg.data"
+PASS: "tests/mul64-imm.data"
+PASS: "tests/mul64-reg.data"
+PASS: "tests/neg.data"
+PASS: "tests/neg64.data"
+PASS: "tests/prime.data"
+PASS: "tests/rsh32-imm-high.data"
+PASS: "tests/rsh32-imm-neg.data"
+PASS: "tests/rsh32-imm.data"
+PASS: "tests/rsh32-reg-high.data"
+PASS: "tests/rsh32-reg-neg.data"
+PASS: "tests/rsh32-reg.data"
+PASS: "tests/rsh64-imm-high.data"
+PASS: "tests/rsh64-imm-neg.data"
+PASS: "tests/rsh64-imm.data"
+PASS: "tests/rsh64-reg-high.data"
+PASS: "tests/rsh64-reg-neg.data"
+PASS: "tests/rsh64-reg.data"
+SKIP: "tests/sdiv32-by-zero-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv32-by-zero-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv32-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv32-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv64-by-zero-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv64-by-zero-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv64-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/sdiv64-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-neg-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-neg-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-pos-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-pos-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-zero-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-neg-by-zero-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-pos-by-neg-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod32-pos-by-neg-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-neg-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-neg-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-pos-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-pos-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-zero-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-neg-by-zero-reg.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-pos-by-neg-imm.data" Test file contains unsupported instructions.
+SKIP: "tests/smod64-pos-by-neg-reg.data" Test file contains unsupported instructions.
+PASS: "tests/stack.data"
+PASS: "tests/stb.data"
+PASS: "tests/stdw.data"
+PASS: "tests/sth.data"
+PASS: "tests/stw.data"
+PASS: "tests/stxb-all.data"
+PASS: "tests/stxb-all2.data"
+PASS: "tests/stxb-chain.data"
+PASS: "tests/stxb.data"
+PASS: "tests/stxdw.data"
+PASS: "tests/stxh.data"
+PASS: "tests/stxw.data"
+PASS: "tests/subnet.data"
+SKIP: "tests/swap16.data" Test file contains unsupported instructions.
+SKIP: "tests/swap32.data" Test file contains unsupported instructions.
+SKIP: "tests/swap64.data" Test file contains unsupported instructions.
+Passed 168 out of 172 tests.

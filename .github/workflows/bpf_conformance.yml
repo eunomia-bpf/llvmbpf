@@ -25,10 +25,11 @@ jobs:
           LLVM_DIR=/usr/lib/llvm-15/cmake cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 
           cmake --build build --target all -j
 
-    - name: get bpf_conformance
+    - name: get bpf_conformance for spec version
       run: |
         git clone https://github.com/Alan-Jowett/bpf_conformance --recursive
         cd bpf_conformance
+        git checkout 89c3d74
         cmake . -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build --target bpf_conformance_runner
 
@@ -38,6 +39,35 @@ jobs:
         ./bpf_conformance/tests --plugin_path \
         build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
         > bpf_conformance_results.txt  || echo "ok"
+        diff ./github/assets/bpf_conformance_test.txt bpf_conformance_results.txt 
+
+    - name: upload coverage
+      run: |
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter system-files
+          lcov --list coverage.info # debug info
+        
+    - uses: codecov/codecov-action@v4
+      with:
+            fail_ci_if_error: true # optional (default = false)
+            files: ./coverage.info # optional
+            flags: bpf_conformance
+            token: ${{ secrets.CODECOV_TOKEN }} # required
+            verbose: true # optional (default = false)
+  
+    - name: get bpf_conformance newest
+      run: |
+              cd bpf_conformance
+              git checkout main
+              cmake . -B build -DCMAKE_BUILD_TYPE=Release
+              cmake --build build --target bpf_conformance_runner
+      
+    - name: test bpf_conformance newest
+      run: |
+              ./bpf_conformance/build/bin/bpf_conformance_runner  --test_file_directory \
+              ./bpf_conformance/tests --plugin_path \
+              build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
+              > bpf_conformance_results.txt  || echo "ok"
 
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3

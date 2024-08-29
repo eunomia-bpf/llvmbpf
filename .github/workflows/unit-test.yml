@@ -36,9 +36,9 @@ jobs:
         lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter system-files
         lcov --list coverage.info # debug info
       
-    - name: Upload Report to Codecov
-      uses: codecov/codecov-action@v2
+    - uses: codecov/codecov-action@v4
       with:
-        files: ./coverage.info
-        fail_ci_if_error: true
-        functionalities: fix
+          fail_ci_if_error: true # optional (default = false)
+          files: ./coverage.info # optional
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+          verbose: true # optional (default = false)

@@ -17,7 +17,7 @@ jobs:
         submodules: 'recursive'
 
     - name: Install lcov (Ubuntu)
-      run: sudo apt install -y lcov llvm-15-dev libzstd-dev
+      run: sudo apt install -y lcov llvm-15-dev libzstd-dev libboost-all-dev
       
     - name: build
       run: 

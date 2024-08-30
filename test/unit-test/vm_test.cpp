@@ -173,3 +173,29 @@ TEST_CASE("Test AOT compilation and loading")
 		REQUIRE(vm.get_error_message() == "Already compiled");
 	}
 }
+
+TEST_CASE("Test loading and executing incorrect code") {
+    bpftime::llvmbpf_vm vm;
+
+    // Example of incorrect or malformed eBPF instructions
+    const unsigned char wrong_code[] = "\x00\x00\x00\x00\x00\x00\x00\x00";  // Invalid eBPF instruction
+
+    SECTION("Execute without valid code") {
+        vm.unload_code();  // Ensure no code is loaded
+        uint64_t ret = 0;
+        uint64_t mem = 0;
+
+        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
+        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this is the error message
+    }
+
+    SECTION("Load and execute incorrect code") {
+        REQUIRE(vm.load_code((const void *)wrong_code, sizeof(wrong_code) - 1) == 0);
+
+        uint64_t ret = 0;
+        uint64_t mem = 0;
+
+        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);  // Execution should fail
+        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this error message
+    }
+}

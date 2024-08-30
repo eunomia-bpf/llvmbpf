@@ -41,7 +41,7 @@ jobs:
           cmake --build build --target all -j
     - name: test emit llvm
       run: |
-        ./build/cli/bpftime-vm build -emit-llvm .github/assets/sum.bpf.o
+        ./build/cli/bpftime-vm build .github/assets/sum.bpf.o -emit-llvm
 
     - name: Do compilation & run
       run: |

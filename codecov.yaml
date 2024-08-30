@@ -17,3 +17,4 @@ coverage:
         target: auto
         base: auto
         only_pulls: false
+        threshold: 25%

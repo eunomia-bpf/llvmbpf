@@ -75,6 +75,10 @@ TEST_CASE("Test simple cond")
 		uint64_t ret = 0;
 		uint64_t mem = 0;
 
+		REQUIRE(vm.compile());
+		// compile double times
+		REQUIRE(vm.compile());
+
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
 		REQUIRE(ret == 4);
 	}

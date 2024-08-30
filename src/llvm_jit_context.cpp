@@ -482,7 +482,7 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	auto define_extSymbols_err =
 		mainDylib.define(absoluteSymbols(extSymbols));
 	if (auto err = mainDylib.define(absoluteSymbols(extSymbols)); !err) {
-		SPDLOG_INFO("LLVM-JIT: failed to define external symbols");
+		SPDLOG_DEBUG("LLVM-JIT: failed to define external symbols");
 	}
 	// Define lddw helpers
 	SymbolMap lddwSyms;
@@ -521,7 +521,7 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
 	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
 	if (auto err = mainDylib.define(absoluteSymbols(lddwSyms)); !err) {
-		SPDLOG_INFO("LLVM-JIT: failed to define lddw helpers symbols");
+		SPDLOG_DEBUG("LLVM-JIT: failed to define lddw helpers symbols");
 	}
 	return { std::move(jit), extFuncNames, definedLddwHelpers };
 }

@@ -39,6 +39,10 @@ jobs:
       run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBUILD_LLVM_AOT_CLI=1 -G Ninja
           cmake --build build --target all -j
+    - name: test emit llvm
+      run: |
+        ./build/cli/bpftime-vm build .github/assets/sum.bpf.o -emit-llvm
+
     - name: Do compilation & run
       run: |
         export PATH=$PATH:~/.bpftime
@@ -53,5 +57,6 @@ jobs:
           echo "Not found!"
           exit 1
         fi
+
         
       

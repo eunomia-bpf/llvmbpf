@@ -15,6 +15,5 @@ Subcommands:
 
 A CLI compiler for AOT of llvm-jit.
 
-It can build ebpf ELF into native elf, or execute compiled native ELF. **Helpers and relocations are not supported**
+It can build ebpf ELF into native elf, or execute compiled native ELF. **Helpers and relocations are not supported. For helpers and maps, please use bpftime aot cli in the [bpftime/tools](https://github.com/eunomia-bpf/bpftime)**
 
-This program might be installed by running `make release-with-llvm-jit` in the project root.

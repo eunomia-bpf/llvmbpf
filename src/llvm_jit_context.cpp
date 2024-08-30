@@ -179,8 +179,6 @@ struct spin_lock_guard {
 	}
 };
 
-static ExitOnError ExitOnErr;
-
 static void optimizeModule(llvm::Module &M)
 {
 	// std::cout << "LLVM_VERSION_MAJOR: " << LLVM_VERSION_MAJOR <<
@@ -246,26 +244,47 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);
 }
-void llvm_bpf_jit_context::do_jit_compile()
+
+llvm::Error llvm_bpf_jit_context::do_jit_compile()
 {
 	auto [jit, extFuncNames, definedLddwHelpers] =
 		create_and_initialize_lljit_instance();
-	auto bpfModule = ExitOnErr(
-		generateModule(extFuncNames, definedLddwHelpers, true));
+	if (!jit) {
+		return llvm::make_error<llvm::StringError>(
+			"jit initialization failed",
+			llvm::inconvertibleErrorCode());
+	}
+	// Handle the error from generateModule
+	auto bpfModuleOrErr =
+		generateModule(extFuncNames, definedLddwHelpers, true);
+	if (!bpfModuleOrErr) {
+		return bpfModuleOrErr.takeError();
+	}
+	// If successful, get the module
+	auto bpfModule = std::move(*bpfModuleOrErr);
+	// Optimize the module
 	bpfModule.withModuleDo([](auto &M) { optimizeModule(M); });
-	ExitOnErr(jit->addIRModule(std::move(bpfModule)));
+	// Handle the error from addIRModule
+	if (auto err = jit->addIRModule(std::move(bpfModule))) {
+		return err;
+	}
+	// If everything succeeds, move the JIT instance
 	this->jit = std::move(jit);
+	return llvm::Error::success();
 }
 
 precompiled_ebpf_function llvm_bpf_jit_context::compile()
 {
 	spin_lock_guard guard(compiling.get());
 	if (!this->jit.has_value()) {
-		do_jit_compile();
+		auto res = do_jit_compile();
+		if (res) {
+			SPDLOG_ERROR("LLVM-JIT: failed to compile");
+			return nullptr;
+		}
 	} else {
 		SPDLOG_DEBUG("LLVM-JIT: already compiled");
 	}
-
 	return this->get_entry_address();
 }
 
@@ -387,7 +406,8 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(bool print_ir)
 	return this->do_aot_compile(extNames, lddwNames, print_ir);
 }
 
-void llvm_bpf_jit_context::load_aot_object(const std::vector<uint8_t> &buf)
+llvm::Error
+llvm_bpf_jit_context::load_aot_object(const std::vector<uint8_t> &buf)
 {
 	SPDLOG_INFO("LLVM-JIT: Loading aot object");
 	if (jit.has_value()) {
@@ -399,16 +419,19 @@ void llvm_bpf_jit_context::load_aot_object(const std::vector<uint8_t> &buf)
 		StringRef((const char *)buf.data(), buf.size()));
 	auto [jit, extFuncNames, definedLddwHelpers] =
 		create_and_initialize_lljit_instance();
+	if (!jit) {
+		return llvm::make_error<llvm::StringError>(
+			"jit initialization failed",
+			llvm::inconvertibleErrorCode());
+	}
 	if (auto err = jit->addObjectFile(std::move(buffer)); err) {
-		std::string buf;
-		raw_string_ostream os(buf);
-		os << err;
-		SPDLOG_CRITICAL("Unable to add object file: {}", buf);
-		throw std::runtime_error("Failed to load AOT object");
+		SPDLOG_ERROR("Unable to add object file");
+		return err;
 	}
 	this->jit = std::move(jit);
 	// Test getting entry function
 	this->get_entry_address();
+	return llvm::Error::success();
 }
 
 std::tuple<std::unique_ptr<llvm::orc::LLJIT>, std::vector<std::string>,
@@ -417,7 +440,13 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 {
 	// Create a JIT builder
 	SPDLOG_DEBUG("LLVM-JIT: Creating LLJIT instance");
-	auto jit = ExitOnErr(LLJITBuilder().create());
+	auto jit_err = LLJITBuilder().create();
+	if (!jit_err) {
+  		(void) jit_err.takeError();
+		return std::make_tuple(nullptr, std::vector<std::string>{},
+				       std::vector<std::string>{});
+	}
+	auto jit = std::move(*jit_err);
 
 	auto &mainDylib = jit->getMainJITDylib();
 	std::vector<std::string> extFuncNames;
@@ -450,7 +479,11 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 		jit->getExecutionSession().intern("__aeabi_unwind_cpp_pr1"),
 		JITEvaluatedSymbol::fromPointer(__aeabi_unwind_cpp_pr1));
 #endif
-	ExitOnErr(mainDylib.define(absoluteSymbols(extSymbols)));
+	auto define_extSymbols_err =
+		mainDylib.define(absoluteSymbols(extSymbols));
+	if (auto err = mainDylib.define(absoluteSymbols(extSymbols)); !err) {
+		SPDLOG_DEBUG("LLVM-JIT: failed to define external symbols");
+	}
 	// Define lddw helpers
 	SymbolMap lddwSyms;
 	std::vector<std::string> definedLddwHelpers;
@@ -481,12 +514,15 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	// Only map_val will have a chance to be called at runtime, so it's the
 	// only symbol to be defined
 	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
-	// These symbols won't be used at runtime
+	// These symbols won't be used at runtime, because we have already
+	// do relocation when loading the eBPF bytecode
 	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm.map_by_fd);
 	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm.map_by_idx);
 	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
 	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
-	ExitOnErr(mainDylib.define(absoluteSymbols(lddwSyms)));
+	if (auto err = mainDylib.define(absoluteSymbols(lddwSyms)); !err) {
+		SPDLOG_DEBUG("LLVM-JIT: failed to define lddw helpers symbols");
+	}
 	return { std::move(jit), extFuncNames, definedLddwHelpers };
 }
 

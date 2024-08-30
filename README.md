@@ -17,7 +17,14 @@ This library is optimized for performance, flexibility, and minimal dependencies
 
 For a comprehensive userspace eBPF runtime that includes support for maps, helpers, and seamless execution of Uprobe, syscall trace, XDP, and other eBPF programs—similar to kernel functionality but in userspace—please refer to the [bpftime](https://github.com/eunomia-bpf/bpftime) project.
 
-## build
+- [Userspace eBPF VM with LLVM JIT/AOT Compiler](#userspace-ebpf-vm-with-llvm-jitaot-compiler)
+  - [build project](#build-project)
+  - [Use llvmbpf as a library](#use-llvmbpf-as-a-library)
+  - [Use llvmbpf as a AOT compiler](#use-llvmbpf-as-a-aot-compiler)
+  - [Test with bpf-conformance](#test-with-bpf-conformance)
+  - [License](#license)
+
+## build project
 
 ```sh
 sudo apt install llvm-15-dev libzstd-dev

@@ -12,6 +12,7 @@ endif()
 
 set(TEST_SOURCES
     bpf_prog_test.cpp
+    vm_test.cpp
 )
 
 add_executable(llvm_jit_tests ${TEST_SOURCES})

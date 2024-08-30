@@ -4,18 +4,6 @@
 #include "llvmbpf.hpp"
 #include "bpf_progs.h"
 
-TEST_CASE("Test simple cond")
-{
-	bpftime::llvmbpf_vm vm;
-	REQUIRE(vm.load_code((const void *)simple_cond_1,
-			     sizeof(simple_cond_1) - 1) == 0);
-	uint64_t ret = 0;
-	uint64_t mem = 0;
-
-	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
-	REQUIRE(ret == 4);
-}
-
 extern "C" uint64_t add_func(uint64_t a, uint64_t b, uint64_t, uint64_t,
 			     uint64_t)
 {
@@ -31,19 +19,6 @@ TEST_CASE("Test aot compilation for extenal function")
 	uint64_t ret = 0;
 	uint64_t mem = 0;
 
-	SECTION("Run using JIT")
-	{
-		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
-		REQUIRE(ret == 4);
-	}
-
-	SECTION("Run using AOT")
-	{
-		auto aot_result = vm.do_aot_compile();
-		REQUIRE(aot_result.size() > 0);
-		auto jit_func = vm.load_aot_object(aot_result);
-		REQUIRE(jit_func.has_value());
-		ret = jit_func.value()(&mem, sizeof(mem));
-		REQUIRE(ret == 4);
-	}
+	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+	REQUIRE(ret == 4);
 }

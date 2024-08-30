@@ -28,10 +28,6 @@ const static char *LDDW_HELPER_CODE_ADDR = "__lddw_helper_code_addr";
 
 #define IS_ALIGNED(x, a) (((uintptr_t)(x) & ((a) - 1)) == 0)
 
-#ifndef MAX_EXT_FUNCS
-#define MAX_EXT_FUNCS 8192
-#endif
-
 #ifndef EBPF_STACK_SIZE
 // Compatible to C headers
 #define EBPF_STACK_SIZE 512
@@ -56,13 +52,13 @@ class llvm_bpf_jit_context {
 	create_and_initialize_lljit_instance();
 
     public:
-	void do_jit_compile();
+	llvm::Error do_jit_compile();
 	llvm_bpf_jit_context(llvmbpf_vm &vm);
 	virtual ~llvm_bpf_jit_context();
 	precompiled_ebpf_function compile();
 	precompiled_ebpf_function get_entry_address();
 	std::vector<uint8_t> do_aot_compile(bool print_ir = false);
-	void load_aot_object(const std::vector<uint8_t> &buf);
+	llvm::Error load_aot_object(const std::vector<uint8_t> &buf);
 };
 
 } // namespace bpftime

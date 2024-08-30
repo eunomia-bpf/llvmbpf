@@ -73,11 +73,7 @@ uint64_t map_by_fd(uint32_t fd)
 	std::cout << "map_by_fd " << fd << std::endl;
 	return fd;
 }
-uint64_t map_by_idx(uint32_t idx)
-{
-	std::cout << "map_by_idx " << idx << std::endl;
-	return idx;
-}
+
 uint64_t map_val(uint64_t val)
 {
 	std::cout << "map_val " << val << std::endl;
@@ -89,16 +85,6 @@ uint64_t map_val(uint64_t val)
 		return 0;
 	}
 }
-uint64_t var_addr(uint32_t idx)
-{
-	std::cout << "var_addr " << idx << std::endl;
-	return idx;
-}
-uint64_t code_addr(uint32_t idx)
-{
-	std::cout << "code_addr " << idx << std::endl;
-	return idx;
-}
 
 int main(int argc, char *argv[])
 {
@@ -106,26 +92,23 @@ int main(int argc, char *argv[])
 	size_t code_len = sizeof(xdp_counter_bytecode) - 1;
 	uint64_t res = 0;
 	llvmbpf_vm vm;
-	printf("running ebpf prog, code len: %zd\n", code_len);
+	std::cout << "running ebpf prog, code len: " << code_len << std::endl;
 
 	res = vm.load_code(code, code_len);
 	if (res) {
-		fprintf(stderr, "Failed to load: %s\n",
-			vm.get_error_message().c_str());
+		std::cout << vm.get_error_message() << std::endl;
 		exit(1);
 	}
 	vm.register_external_function(1, "bpf_map_lookup_elem",
 				      (void *)bpf_map_lookup_elem);
 	// set the lddw helpers for accessing maps
-	vm.set_lddw_helpers(map_by_fd, map_by_idx, map_val, var_addr,
-			    code_addr);
+	vm.set_lddw_helpers(map_by_fd, nullptr, map_val, nullptr, nullptr);
 	auto func = vm.compile();
 	if (!func) {
-		fprintf(stderr, "Failed to compile: %s\n",
-			vm.get_error_message().c_str());
+		std::cout << vm.get_error_message() << std::endl;
 		exit(1);
 	}
-	// Map value (counter) should be 0	
+	// Map value (counter) should be 0
 	std::cout << "cntrs_array[0] = " << cntrs_array[0] << std::endl;
 	int err = vm.exec(&bpf_mem, sizeof(bpf_mem), res);
 	assert(err == 0 && cntrs_array[0] == 1);

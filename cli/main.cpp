@@ -92,10 +92,14 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 				i, "helper_" + std::to_string(i), nullptr);
 		}
 		auto result = vm.do_aot_compile(emit_llvm);
-
+		if (!result) {
+			SPDLOG_ERROR("Failed to compile program {}: {}",
+				     name, vm.get_error_message());
+			return 1;
+		}
 		auto out_path = output / (std::string(name) + ".o");
 		std::ofstream ofs(out_path, std::ios::binary);
-		ofs.write((const char *)result.data(), result.size());
+		ofs.write((const char *)result->data(), result->size());
 		if (!emit_llvm)
 			SPDLOG_INFO("Program {} written to {}", name,
 				    out_path.c_str());

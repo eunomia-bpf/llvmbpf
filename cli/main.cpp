@@ -93,8 +93,8 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 		}
 		auto result = vm.do_aot_compile(emit_llvm);
 		if (!result) {
-			SPDLOG_ERROR("Failed to compile program {}: {}",
-				     name, vm.get_error_message());
+			SPDLOG_ERROR("Failed to compile program {}: {}", name,
+				     vm.get_error_message());
 			return 1;
 		}
 		auto out_path = output / (std::string(name) + ".o");

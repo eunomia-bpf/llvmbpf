@@ -13,15 +13,20 @@ This component is part of the [bpftime](https://github.com/eunomia-bpf/bpftime) 
 - Loads and executes AOT-compiled ELF object files within the eBPF runtime.
 - Supports eBPF helpers and maps lddw functions.
 
-This library is optimized for performance, flexibility, and minimal dependencies. It does not include maps, helpers, verifiers, or loaders for eBPF applications, making it suitable as a lightweight, high-performance library.
+This library is optimized for performance, flexibility, and minimal dependencies. It does not include maps implement, helpers, verifiers, or loaders for eBPF applications, making it suitable as a lightweight, high-performance library.
 
 For a comprehensive userspace eBPF runtime that includes support for maps, helpers, and seamless execution of Uprobe, syscall trace, XDP, and other eBPF programs—similar to kernel functionality but in userspace—please refer to the [bpftime](https://github.com/eunomia-bpf/bpftime) project.
 
 - [Userspace eBPF VM with LLVM JIT/AOT Compiler](#userspace-ebpf-vm-with-llvm-jitaot-compiler)
   - [build project](#build-project)
-  - [Use llvmbpf as a library](#use-llvmbpf-as-a-library)
-  - [Use llvmbpf as a AOT compiler](#use-llvmbpf-as-a-aot-compiler)
-  - [Test with bpf-conformance](#test-with-bpf-conformance)
+  - [Usage](#usage)
+    - [Use llvmbpf as a library](#use-llvmbpf-as-a-library)
+    - [Use llvmbpf as a AOT compiler](#use-llvmbpf-as-a-aot-compiler)
+    - [load eBPF bytecode from ELF file](#load-ebpf-bytecode-from-elf-file)
+    - [Maps and data relocation support](#maps-and-data-relocation-support)
+  - [Test](#test)
+    - [Unit test](#unit-test)
+    - [Test with bpf-conformance](#test-with-bpf-conformance)
   - [License](#license)
 
 ## build project
@@ -32,7 +37,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target all -j
 ```
 
-## Use llvmbpf as a library
+## Usage
+
+### Use llvmbpf as a library
 
 See [example](example/main.cpp) of how to use the library as a vm:
 
@@ -59,7 +66,7 @@ void run_ebpf_prog(const void *code, size_t code_len)
 }
 ```
 
-## Use llvmbpf as a AOT compiler
+### Use llvmbpf as a AOT compiler
 
 You can use the cli to generate the LLVM IR from eBPF bytecode:
 
@@ -117,7 +124,177 @@ Load and run a AOTed eBPF program:
 [2024-08-10 14:57:16.991] [info] [main.cpp:136] Program executed successfully. Return value: 6
 ```
 
-## Test with bpf-conformance
+### load eBPF bytecode from ELF file
+
+You can use llvmbpf together with libbpf to load the eBPF bytecode directly from `bpf.o` ELF file. For example:
+
+```c
+  bpf_object *obj = bpf_object__open(ebpf_elf.c_str());
+  if (!obj) {
+    return 1;
+  }
+  std::unique_ptr<bpf_object, decltype(&bpf_object__close)> elf(
+    obj, bpf_object__close);
+
+  bpf_program *prog;
+  for ((prog) = bpf_object__next_program((elf.get()), __null);
+       (prog) != __null;
+       (prog) = bpf_object__next_program((elf.get()), (prog))) {
+    const char *name = bpf_program__name(prog);
+    llvmbpf_vm vm;
+
+    vm.load_code((const void *)bpf_program__insns(prog),
+         (uint32_t)bpf_program__insn_cnt(prog) * 8);
+  ...
+  }
+```
+
+For complete code example, please refer to [cli](cli).
+
+However, the `bpf.o` ELF file has no map and data relocation support. We would recommend using the bpftime to load and relocation the eBPF bytecode from ELF file. This include:
+
+- Write a loader like normal kernel eBPF loader to load the eBPF bytecode, you can find a example [here](https://github.com/eunomia-bpf/bpftime/blob/master/example/xdp-counter/xdp-counter.c).
+- The loader will use the libbpf, which support:
+  - Relocation for map. The map id will be allocated by the loader and bpftime, you can use the map id to access map through the helpers.
+  - The data can be accessed through the lddw helper function.
+- After the loader load the eBPF bytecode and complete the relocation, you can use the [bpftimetool](https://eunomia.dev/zh/bpftime/documents/bpftimetool/) to dump the map information and eBPF bytecode.
+
+### Maps and data relocation support
+
+bpftime already has maps and data relocation support. The easiest way to use it is just use bpftime and write the loader and eBPF program like kernel eBPF. The `llvmbpf` libray provide a approach to interact with the maps.
+
+See [example/maps.cpp](example/maps.cpp) of how to use the library as a vm and works with maps:
+
+The eBPF can work with maps in two ways:
+
+- Using helper functions to access the maps, like `bpf_map_lookup_elem`, `bpf_map_update_elem`, etc.
+- Using maps as global variables in the eBPF program, and access the maps directly.
+
+For a eBPF program like [https://github.com/eunomia-bpf/bpftime/blob/master/example/xdp-counter/](https://github.com/eunomia-bpf/bpftime/blob/master/example/xdp-counter/):
+
+```c
+// use map type define
+struct {
+  __uint(type, BPF_MAP_TYPE_ARRAY);
+  __type(key, __u32);
+  __type(value, __u32);
+  __uint(max_entries, CTRL_ARRAY_SIZE);
+} ctl_array SEC(".maps");
+
+// use global variable define
+__u64 cntrs_array[CNTRS_ARRAY_SIZE];
+
+SEC("xdp")
+int xdp_pass(struct xdp_md* ctx) {
+  void* data_end = (void*)(long)ctx->data_end;
+  void* data = (void*)(long)ctx->data;
+  __u32 ctl_flag_pos = 0;
+  __u32 cntr_pos = 0;
+
+  // access maps with helpers
+  __u32* flag = bpf_map_lookup_elem(&ctl_array, &ctl_flag_pos);
+  if (!flag || (*flag != 0)) {
+    return XDP_PASS;
+  };
+
+  // access maps with global variables
+  cntrs_array[cntr_pos]++;
+
+  if (data + sizeof(struct ethhdr) > data_end)
+    return XDP_DROP;
+  swap_src_dst_mac(data);
+  return XDP_TX;
+}
+```
+
+We can define the map and access them like:
+
+```cpp
+uint32_t ctl_array[2] = { 0, 0 };
+uint64_t cntrs_array[2] = { 0, 0 };
+
+void *bpf_map_lookup_elem(uint64_t map_fd, void *key)
+{
+  std::cout << "bpf_map_lookup_elem " << map_fd << std::endl;
+  if (map_fd == 5) {
+    return &ctl_array[*(uint32_t *)key];
+  } else if (map_fd == 6) {
+    return &cntrs_array[*(uint32_t *)key];
+  } else {
+    return nullptr;
+  }
+  return 0;
+}
+
+uint64_t map_by_fd(uint32_t fd)
+{
+  std::cout << "map_by_fd " << fd << std::endl;
+  return fd;
+}
+
+uint64_t map_val(uint64_t val)
+{
+  std::cout << "map_val " << val << std::endl;
+  if (val == 5) {
+    return (uint64_t)(void *)ctl_array;
+  } else if (val == 6) {
+    return (uint64_t)(void *)cntrs_array;
+  } else {
+    return 0;
+  }
+}
+
+int main(int argc, char *argv[])
+{
+  auto code = xdp_counter_bytecode;
+  size_t code_len = sizeof(xdp_counter_bytecode) - 1;
+  uint64_t res = 0;
+  llvmbpf_vm vm;
+
+  res = vm.load_code(code, code_len);
+  if (res) {
+    std::cout << vm.get_error_message() << std::endl;
+    exit(1);
+  }
+  vm.register_external_function(1, "bpf_map_lookup_elem",
+              (void *)bpf_map_lookup_elem);
+  // set the lddw helpers for accessing maps
+  vm.set_lddw_helpers(map_by_fd, nullptr, map_val, nullptr, nullptr);
+  auto func = vm.compile();
+  if (!func) {
+    std::cout << vm.get_error_message() << std::endl;
+    exit(1);
+  }
+  // Map value (counter) should be 0
+  std::cout << "cntrs_array[0] = " << cntrs_array[0] << std::endl;
+  int err = vm.exec(&bpf_mem, sizeof(bpf_mem), res);
+  std::cout << "\nreturn value = " << res << std::endl;
+  // counter should be 1
+  std::cout << "cntrs_array[0] = " << cntrs_array[0] << std::endl;
+  ....
+}
+```
+
+Reference:
+
+- <https://prototype-kernel.readthedocs.io/en/latest/bpf/ebpf_maps.html>
+- <https://www.ietf.org/archive/id/draft-ietf-bpf-isa-00.html#name-64-bit-immediate-instructio>
+
+## Test
+
+### Unit test
+
+Compile:
+
+```sh
+sudo apt install llvm-15-dev libzstd-dev
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1
+cmake --build build --target all -j
+```
+
+The unit tests can be found at `build/test/unit-test/llvm_jit_tests`.
+
+### Test with bpf-conformance
 
 See the CI in [.github/workflows/bpf_conformance.yml](.github/workflows/bpf_conformance.yml) for how to run the bpf-conformance tests.
 

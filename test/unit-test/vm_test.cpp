@@ -64,8 +64,7 @@ TEST_CASE("Test simple cond")
 		uint64_t mem = 0;
 
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-		REQUIRE(vm.get_error_message() ==
-			"Unable to compile eBPF program");
+		REQUIRE(vm.get_error_message() == "No instructions provided");
 	}
 
 	REQUIRE(vm.load_code((const void *)simple_cond_1,
@@ -75,6 +74,10 @@ TEST_CASE("Test simple cond")
 	{
 		uint64_t ret = 0;
 		uint64_t mem = 0;
+
+		REQUIRE(vm.compile());
+		// compile double times
+		REQUIRE(vm.compile());
 
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
 		REQUIRE(ret == 4);
@@ -95,8 +98,7 @@ TEST_CASE("Test simple cond")
 		uint64_t mem = 0;
 
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-		REQUIRE(vm.get_error_message() ==
-			"Unable to compile eBPF program");
+		REQUIRE(vm.get_error_message() == "No instructions provided");
 	}
 }
 
@@ -137,6 +139,15 @@ TEST_CASE("Test AOT compilation and loading")
 	REQUIRE(vm.load_code((const void *)simple_cond_1,
 			     sizeof(simple_cond_1) - 1) == 0);
 
+	SECTION("load invalid AOT object")
+	{
+		std::vector<uint8_t> invalid_object{ 0x00, 0x01, 0x02, 0x03 };
+		auto func = vm.load_aot_object(invalid_object);
+		REQUIRE(!func.has_value());
+		REQUIRE(vm.get_error_message() ==
+			"The file was not recognized as a valid object file");
+	}
+
 	SECTION("AOT compile and load")
 	{
 		auto object_code_opt = vm.do_aot_compile(true);
@@ -174,28 +185,141 @@ TEST_CASE("Test AOT compilation and loading")
 	}
 }
 
-TEST_CASE("Test loading and executing incorrect code") {
-    bpftime::llvmbpf_vm vm;
+TEST_CASE("Test loading and executing incorrect code")
+{
+	bpftime::llvmbpf_vm vm;
 
-    // Example of incorrect or malformed eBPF instructions
-    const unsigned char wrong_code[] = "\x00\x00\x00\x00\x00\x00\x00\x00";  // Invalid eBPF instruction
+	// Example of incorrect or malformed eBPF instructions
+	const unsigned char wrong_code[] =
+		"\x00\x00\x00\x00\x00\x00\x00\x00"; // Invalid eBPF instruction
 
-    SECTION("Execute without valid code") {
-        vm.unload_code();  // Ensure no code is loaded
-        uint64_t ret = 0;
-        uint64_t mem = 0;
+	SECTION("Execute without valid code")
+	{
+		vm.unload_code(); // Ensure no code is loaded
+		uint64_t ret = 0;
+		uint64_t mem = 0;
 
-        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this is the error message
-    }
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
+		REQUIRE(vm.get_error_message() ==
+			"No instructions provided"); // Assuming this is the
+						     // error message
+	}
 
-    SECTION("Load and execute incorrect code") {
-        REQUIRE(vm.load_code((const void *)wrong_code, sizeof(wrong_code) - 1) == 0);
+	SECTION("Load and execute incorrect code")
+	{
+		REQUIRE(vm.load_code((const void *)wrong_code,
+				     sizeof(wrong_code) - 1) == 0);
 
-        uint64_t ret = 0;
-        uint64_t mem = 0;
+		uint64_t ret = 0;
+		uint64_t mem = 0;
 
-        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);  // Execution should fail
-        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this error message
-    }
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0); // Execution
+							       // should fail
+		REQUIRE(vm.get_error_message() ==
+			"Unsupported or illegal opcode: 0 at pc 0"); // Assuming
+								     // this
+								     // error
+								     // message
+	}
+}
+
+const unsigned char xdp_counter_bytecode[] = "\x79\x16\x00\x00\x00\x00\x00\x00"
+					     "\x79\x17\x08\x00\x00\x00\x00\x00"
+					     "\xb7\x01\x00\x00\x00\x00\x00\x00"
+					     "\x63\x1a\xfc\xff\x00\x00\x00\x00"
+					     "\xbf\xa2\x00\x00\x00\x00\x00\x00"
+					     "\x07\x02\x00\x00\xfc\xff\xff\xff"
+					     "\x18\x11\x00\x00\x05\x00\x00\x00"
+					     "\x00\x00\x00\x00\x00\x00\x00\x00"
+					     "\x85\x00\x00\x00\x01\x00\x00\x00"
+					     "\xbf\x01\x00\x00\x00\x00\x00\x00"
+					     "\xb7\x00\x00\x00\x02\x00\x00\x00"
+					     "\x15\x01\x18\x00\x00\x00\x00\x00"
+					     "\x61\x11\x00\x00\x00\x00\x00\x00"
+					     "\x55\x01\x16\x00\x00\x00\x00\x00"
+					     "\x18\x21\x00\x00\x06\x00\x00\x00"
+					     "\x00\x00\x00\x00\x00\x00\x00\x00"
+					     "\x79\x12\x00\x00\x00\x00\x00\x00"
+					     "\x07\x02\x00\x00\x01\x00\x00\x00"
+					     "\x7b\x21\x00\x00\x00\x00\x00\x00"
+					     "\xb7\x00\x00\x00\x01\x00\x00\x00"
+					     "\xbf\x61\x00\x00\x00\x00\x00\x00"
+					     "\x07\x01\x00\x00\x0e\x00\x00\x00"
+					     "\x2d\x71\x0d\x00\x00\x00\x00\x00"
+					     "\x69\x61\x00\x00\x00\x00\x00\x00"
+					     "\x69\x62\x06\x00\x00\x00\x00\x00"
+					     "\x6b\x26\x00\x00\x00\x00\x00\x00"
+					     "\x69\x62\x08\x00\x00\x00\x00\x00"
+					     "\x69\x63\x02\x00\x00\x00\x00\x00"
+					     "\x6b\x36\x08\x00\x00\x00\x00\x00"
+					     "\x6b\x26\x02\x00\x00\x00\x00\x00"
+					     "\x69\x62\x0a\x00\x00\x00\x00\x00"
+					     "\x69\x63\x04\x00\x00\x00\x00\x00"
+					     "\x6b\x36\x0a\x00\x00\x00\x00\x00"
+					     "\x6b\x16\x06\x00\x00\x00\x00\x00"
+					     "\x6b\x26\x04\x00\x00\x00\x00\x00"
+					     "\xb7\x00\x00\x00\x03\x00\x00\x00"
+					     "\x95\x00\x00\x00\x00\x00\x00\x00";
+
+TEST_CASE("Test compile with no require helper")
+{
+	bpftime::llvmbpf_vm vm;
+	auto code = xdp_counter_bytecode;
+	size_t code_len = sizeof(xdp_counter_bytecode) - 1;
+	uint64_t res = 0;
+
+	REQUIRE(vm.load_code(code, code_len) == 0);
+
+	auto func = vm.compile();
+	REQUIRE(!func.has_value()); // Compilation should fail due to missing
+				    // helpers
+	REQUIRE(vm.get_error_message() ==
+		"Ext func not found: _bpf_helper_ext_0001");
+}
+
+uint64_t map_val(uint64_t val)
+{
+	return 0;
+}
+
+TEST_CASE("Test compile with no LDDW helper")
+{
+	bpftime::llvmbpf_vm vm;
+	auto code = xdp_counter_bytecode;
+	size_t code_len = sizeof(xdp_counter_bytecode) - 1;
+	uint64_t res = 0;
+
+	REQUIRE(vm.load_code(code, code_len) == 0);
+
+	vm.register_external_function(1, "bpf_map_lookup_elem",
+				      (void *)nullptr);
+
+	// Set some helpers to nullptr, which should simulate a missing helper
+	vm.set_lddw_helpers(nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	auto func = vm.compile();
+	REQUIRE(!func.has_value()); // Compilation should fail due to missing
+	REQUIRE(vm.get_error_message() ==
+		"map_val is not provided, unable to compile at pc 15");
+}
+
+
+TEST_CASE("Test compile with default LDDW helper")
+{
+	bpftime::llvmbpf_vm vm;
+	auto code = xdp_counter_bytecode;
+	size_t code_len = sizeof(xdp_counter_bytecode) - 1;
+	uint64_t res = 0;
+
+	REQUIRE(vm.load_code(code, code_len) == 0);
+
+	vm.register_external_function(1, "bpf_map_lookup_elem",
+				      (void *)map_val);
+
+	// Set some helpers to nullptr, which should simulate a missing helper
+	vm.set_lddw_helpers(nullptr, nullptr, map_val, nullptr, nullptr);
+
+	auto func = vm.compile();
+	REQUIRE(func.has_value()); // Compilation should success because the
+				   // default helpers are provided
 }

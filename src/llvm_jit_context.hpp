@@ -55,7 +55,6 @@ class llvm_bpf_jit_context {
 	llvm::Error do_jit_compile();
 	llvm_bpf_jit_context(llvmbpf_vm &vm);
 	virtual ~llvm_bpf_jit_context();
-	precompiled_ebpf_function compile();
 	precompiled_ebpf_function get_entry_address();
 	std::vector<uint8_t> do_aot_compile(bool print_ir = false);
 	llvm::Error load_aot_object(const std::vector<uint8_t> &buf);

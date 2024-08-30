@@ -25,6 +25,7 @@ jobs:
     - name: Run example
       run: |
         ./build/vm-llvm-example
+        ./build/maps-example
 
     - name: Run tests
       run: |

@@ -14,3 +14,5 @@ test.bin
 *.ll
 bpf_conformance
 coverage.info
+example/standalone/standalone
+example/inline/standalone

@@ -3,7 +3,6 @@
 #include <iostream>
 #include "llvmbpf.hpp"
 
-
 /*
 
 int test()
@@ -54,97 +53,123 @@ const unsigned char simple_cond_1[] =
 	"\x00\x00\x95\x00\x00\x00\x00\x00\x00\x00";
 
 // Example test case for simple condition
-TEST_CASE("Test simple cond") {
-    bpftime::llvmbpf_vm vm;
+TEST_CASE("Test simple cond")
+{
+	bpftime::llvmbpf_vm vm;
 
-    SECTION("Execute without loading code") {
-        vm.unload_code();
-        uint64_t ret = 0;
-        uint64_t mem = 0;
+	SECTION("Execute without loading code")
+	{
+		vm.unload_code();
+		uint64_t ret = 0;
+		uint64_t mem = 0;
 
-        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-        REQUIRE(vm.get_error_message() ==  "Unable to compile eBPF program");
-    }
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
+		REQUIRE(vm.get_error_message() ==
+			"Unable to compile eBPF program");
+	}
 
-    REQUIRE(vm.load_code((const void *)simple_cond_1, sizeof(simple_cond_1) - 1) == 0);
+	REQUIRE(vm.load_code((const void *)simple_cond_1,
+			     sizeof(simple_cond_1) - 1) == 0);
 
-    SECTION("Load valid code and execute") {
-        
-        uint64_t ret = 0;
-        uint64_t mem = 0;
+	SECTION("Load valid code and execute")
+	{
+		uint64_t ret = 0;
+		uint64_t mem = 0;
 
-        REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
-        REQUIRE(ret == 4);
-    }
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 4);
+	}
 
-    SECTION("Load code with invalid length") {
-        REQUIRE(vm.load_code((const void *)simple_cond_1, sizeof(simple_cond_1) - 2) != 0);
-        REQUIRE(vm.get_error_message() == "Code len must be a multiple of 8");
-    }
+	SECTION("Load code with invalid length")
+	{
+		REQUIRE(vm.load_code((const void *)simple_cond_1,
+				     sizeof(simple_cond_1) - 2) != 0);
+		REQUIRE(vm.get_error_message() ==
+			"Code len must be a multiple of 8");
+	}
 
-    SECTION("Execute unloading code") {
-        vm.unload_code();
-        uint64_t ret = 0;
-        uint64_t mem = 0;
+	SECTION("Execute unloading code")
+	{
+		vm.unload_code();
+		uint64_t ret = 0;
+		uint64_t mem = 0;
 
-        REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");
-    }
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
+		REQUIRE(vm.get_error_message() ==
+			"Unable to compile eBPF program");
+	}
 }
 
-TEST_CASE("Test external function registration") {
-    bpftime::llvmbpf_vm vm;
+TEST_CASE("Test external function registration")
+{
+	bpftime::llvmbpf_vm vm;
 
-    SECTION("Register valid external function") {
-        void* dummy_function = (void*)0xdeadbeef;
-        REQUIRE(vm.register_external_function(0, "test_func", dummy_function) == 0);
-    }
+	SECTION("Register valid external function")
+	{
+		void *dummy_function = (void *)0xdeadbeef;
+		REQUIRE(vm.register_external_function(0, "test_func",
+						      dummy_function) == 0);
+	}
 
-    SECTION("Register external function with out of bounds index") {
-        void* dummy_function = (void*)0xdeadbeef;
-        REQUIRE(vm.register_external_function(MAX_EXT_FUNCS + 1, "test_func", dummy_function) != 0);
-        REQUIRE(vm.get_error_message() == "Index too large");
-    }
+	SECTION("Register external function with out of bounds index")
+	{
+		void *dummy_function = (void *)0xdeadbeef;
+		REQUIRE(vm.register_external_function(MAX_EXT_FUNCS + 1,
+						      "test_func",
+						      dummy_function) != 0);
+		REQUIRE(vm.get_error_message() == "Index too large");
+	}
 
-    SECTION("Register external function with existing index") {
-        void* dummy_function = (void*)0xdeadbeef;
-        REQUIRE(vm.register_external_function(0, "test_func", dummy_function) == 0);
-        REQUIRE(vm.register_external_function(0, "test_func", dummy_function) != 0);
-        REQUIRE(vm.get_error_message() == "Already defined");
-    }
+	SECTION("Register external function with existing index")
+	{
+		void *dummy_function = (void *)0xdeadbeef;
+		REQUIRE(vm.register_external_function(0, "test_func",
+						      dummy_function) == 0);
+		REQUIRE(vm.register_external_function(0, "test_func",
+						      dummy_function) != 0);
+		REQUIRE(vm.get_error_message() == "Already defined");
+	}
 }
 
-TEST_CASE("Test AOT compilation and loading") {
-    bpftime::llvmbpf_vm vm;
-    REQUIRE(vm.load_code((const void *)simple_cond_1, sizeof(simple_cond_1) - 1) == 0);
+TEST_CASE("Test AOT compilation and loading")
+{
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code((const void *)simple_cond_1,
+			     sizeof(simple_cond_1) - 1) == 0);
 
-    SECTION("AOT compile and load") {
-        auto object_code_opt = vm.do_aot_compile(true);
-        REQUIRE(object_code_opt.has_value());  // Ensure that the optional contains a value
-        auto& object_code = object_code_opt.value();  // Extract the vector from the optional
-        REQUIRE(!object_code.empty());
+	SECTION("AOT compile and load")
+	{
+		auto object_code_opt = vm.do_aot_compile(true);
+		REQUIRE(object_code_opt.has_value()); // Ensure that the
+						      // optional contains a
+						      // value
+		auto &object_code = object_code_opt.value(); // Extract the
+							     // vector from the
+							     // optional
+		REQUIRE(!object_code.empty());
 
-        auto func = vm.load_aot_object(object_code);
-        REQUIRE(func.has_value());
-    }
+		auto func = vm.load_aot_object(object_code);
+		REQUIRE(func.has_value());
+	}
 
-    SECTION("Load AOT object after JIT compilation") {
-        auto object_code_opt = vm.do_aot_compile(false);
-        REQUIRE(object_code_opt.has_value());
-        auto& object_code = object_code_opt.value();
-        REQUIRE(!object_code.empty());
+	SECTION("Load AOT object after JIT compilation")
+	{
+		auto object_code_opt = vm.do_aot_compile(false);
+		REQUIRE(object_code_opt.has_value());
+		auto &object_code = object_code_opt.value();
+		REQUIRE(!object_code.empty());
 
-        auto func = vm.load_aot_object(object_code);
-        REQUIRE(func.has_value());
+		auto func = vm.load_aot_object(object_code);
+		REQUIRE(func.has_value());
 
-        // Attempt to load another object after JIT compilation
-        auto another_object_code_opt = vm.do_aot_compile(true);
-        REQUIRE(another_object_code_opt.has_value());
-        auto& another_object_code = another_object_code_opt.value();
-        REQUIRE(!another_object_code.empty());
+		// Attempt to load another object after JIT compilation
+		auto another_object_code_opt = vm.do_aot_compile(true);
+		REQUIRE(another_object_code_opt.has_value());
+		auto &another_object_code = another_object_code_opt.value();
+		REQUIRE(!another_object_code.empty());
 
-        auto func2 = vm.load_aot_object(another_object_code);
-        REQUIRE(!func2.has_value());
-        REQUIRE(vm.get_error_message() == "Already compiled");
-    }
+		auto func2 = vm.load_aot_object(another_object_code);
+		REQUIRE(!func2.has_value());
+		REQUIRE(vm.get_error_message() == "Already compiled");
+	}
 }

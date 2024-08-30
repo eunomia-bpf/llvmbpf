@@ -83,16 +83,27 @@ int llvmbpf_vm::exec(void *mem, size_t mem_len,
 
 std::optional<bpftime::precompiled_ebpf_function> llvmbpf_vm::compile() noexcept
 {
+	if (jitted_function) {
+		error_msg = "Already compiled";
+		return jitted_function;
+	}
 	try {
-		auto func = jit_ctx->compile();
-		if (!func) {
-			error_msg = "Unable to compile eBPF program";
+		auto res = jit_ctx->do_jit_compile();
+		if (res) {
+			LLVMErrorRef llvmError =
+				llvm::wrap(std::move(res));
+			error_msg =
+				LLVMGetErrorMessage(llvmError);
+			SPDLOG_ERROR("LLVM-JIT: failed to compile: {}",
+				     error_msg);
 			return {};
 		}
+		auto func = jit_ctx->get_entry_address();
 		jitted_function = func;
 		return func;
 	} catch (const std::exception &e) {
 		error_msg = e.what();
+		jitted_function = std::nullopt;
 		return {};
 	}
 }
@@ -128,8 +139,9 @@ llvmbpf_vm::load_aot_object(const std::vector<uint8_t> &object) noexcept
 		return {};
 	}
 	try {
-		if (this->jit_ctx->load_aot_object(object)) {
-			error_msg = "Unable to load aot object";
+		if (auto res = this->jit_ctx->load_aot_object(object); res) {
+			LLVMErrorRef llvmError = llvm::wrap(std::move(res));
+			error_msg = LLVMGetErrorMessage(llvmError);
 			return {};
 		}
 		jitted_function = this->jit_ctx->get_entry_address();

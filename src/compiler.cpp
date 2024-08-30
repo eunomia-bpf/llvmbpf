@@ -608,7 +608,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						std::to_string(size) +
 						") or mode (" +
 						std::to_string(mode) +
-						") for non-standard load operations",
+						") for non-standard load operations" +
+						" at pc " + std::to_string(pc),
 					llvm::inconvertibleErrorCode());
 			}
 			if (pc + 1 >= insts.size()) {
@@ -619,8 +620,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					llvm::inconvertibleErrorCode());
 			}
 			const auto &nextinst = insts[pc + 1];
-			if (nextinst.opcode || nextinst.dst ||
-			    nextinst.src || nextinst.offset) {
+			if (nextinst.opcode || nextinst.dst || nextinst.src ||
+			    nextinst.offset) {
 				return llvm::make_error<llvm::StringError>(
 					"Loaded LDDW at pc=" +
 						std::to_string(pc) +
@@ -677,7 +678,9 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					if (!vm.map_val) {
 						return llvm::make_error<
 							llvm::StringError>(
-							"map_val is not provided, unable to compile",
+							"map_val is not provided, unable to compile at pc " +
+								std::to_string(
+									pc),
 							llvm::inconvertibleErrorCode());
 					}
 					builder.CreateStore(
@@ -688,7 +691,6 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				} else {
 					SPDLOG_DEBUG(
 						"map_val is required to be evaluated at runtime, emitting calling instructions");
-
 					if (auto itrMapVal = lddwHelper.find(
 						    LDDW_HELPER_MAP_VAL);
 					    itrMapVal != lddwHelper.end()) {
@@ -708,7 +710,9 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					} else {
 						return llvm::make_error<
 							llvm::StringError>(
-							"Using lddw helper 2, which requires map_val to be defined.",
+							"Using lddw helper 2, which requires map_val to be defined at pc " +
+								std::to_string(
+									pc),
 							llvm::inconvertibleErrorCode());
 					}
 				}
@@ -720,7 +724,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				if (!vm.var_addr) {
 					return llvm::make_error<
 						llvm::StringError>(
-						"var_addr is not provided, unable to compile",
+						"var_addr is not provided, unable to compile at pc " +
+							std::to_string(pc),
 						llvm::inconvertibleErrorCode());
 				}
 				builder.CreateStore(
@@ -733,7 +738,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				if (!vm.code_addr) {
 					return llvm::make_error<
 						llvm::StringError>(
-						"code_addr is not provided, unable to compile",
+						"code_addr is not provided, unable to compile at pc " +
+							std::to_string(pc),
 						llvm::inconvertibleErrorCode());
 				}
 				builder.CreateStore(
@@ -786,7 +792,9 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					} else {
 						return llvm::make_error<
 							llvm::StringError>(
-							"map_val is not provided, unable to compile",
+							"map_val is not provided, unable to compile at pc " +
+								std::to_string(
+									pc),
 							llvm::inconvertibleErrorCode());
 					}
 
@@ -812,7 +820,9 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					} else {
 						return llvm::make_error<
 							llvm::StringError>(
-							"Using lddw helper 6, which requires map_val",
+							"Using lddw helper 6 at pc " +
+								std::to_string(
+									pc),
 							llvm::inconvertibleErrorCode());
 					}
 				}
@@ -1056,7 +1066,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Add, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) ==
+						EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 
@@ -1066,7 +1077,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::And, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) ==
+						EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 
@@ -1076,7 +1088,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Or, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) ==
+						EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 			case EBPF_ATOMIC_XOR:
@@ -1085,7 +1098,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Xor, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					(inst.imm & EBPF_ATOMIC_OP_FETCH) == EBPF_ATOMIC_OP_FETCH);
+					(inst.imm & EBPF_ATOMIC_OP_FETCH) ==
+						EBPF_ATOMIC_OP_FETCH);
 				break;
 			}
 			case EBPF_ATOMIC_OP_XCHG: {
@@ -1097,7 +1111,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				break;
 			}
 			case EBPF_ATOMIC_OP_CMPXCHG: {
-				bool is64 = inst.opcode == EBPF_ATOMIC_OPCODE_64;
+				bool is64 =
+					inst.opcode == EBPF_ATOMIC_OPCODE_64;
 				auto vPtr = builder.CreateGEP(
 					builder.getInt8Ty(),
 					builder.CreateLoad(builder.getPtrTy(),
@@ -1138,7 +1153,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		default:
 			return llvm::make_error<llvm::StringError>(
 				"Unsupported or illegal opcode: " +
-					std::to_string(inst.opcode),
+					std::to_string(inst.opcode) +
+					" at pc " + std::to_string(pc),
 				llvm::inconvertibleErrorCode());
 		}
 	}

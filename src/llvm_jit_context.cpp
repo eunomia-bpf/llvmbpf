@@ -247,6 +247,7 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 
 llvm::Error llvm_bpf_jit_context::do_jit_compile()
 {
+	spin_lock_guard guard(compiling.get());
 	auto [jit, extFuncNames, definedLddwHelpers] =
 		create_and_initialize_lljit_instance();
 	if (!jit) {
@@ -272,22 +273,6 @@ llvm::Error llvm_bpf_jit_context::do_jit_compile()
 	this->jit = std::move(jit);
 	return llvm::Error::success();
 }
-
-precompiled_ebpf_function llvm_bpf_jit_context::compile()
-{
-	spin_lock_guard guard(compiling.get());
-	if (!this->jit.has_value()) {
-		auto res = do_jit_compile();
-		if (res) {
-			SPDLOG_ERROR("LLVM-JIT: failed to compile");
-			return nullptr;
-		}
-	} else {
-		SPDLOG_DEBUG("LLVM-JIT: already compiled");
-	}
-	return this->get_entry_address();
-}
-
 llvm_bpf_jit_context::~llvm_bpf_jit_context()
 {
 	pthread_spin_destroy(compiling.get());
@@ -442,7 +427,7 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	SPDLOG_DEBUG("LLVM-JIT: Creating LLJIT instance");
 	auto jit_err = LLJITBuilder().create();
 	if (!jit_err) {
-  		(void) jit_err.takeError();
+		(void)jit_err.takeError();
 		return std::make_tuple(nullptr, std::vector<std::string>{},
 				       std::vector<std::string>{});
 	}
@@ -529,7 +514,7 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 precompiled_ebpf_function llvm_bpf_jit_context::get_entry_address()
 {
 	if (!this->jit.has_value()) {
-		SPDLOG_CRITICAL(
+		SPDLOG_ERROR(
 			"Not compiled yet. Unable to get entry func address");
 		throw std::runtime_error("Not compiled yet");
 	}
@@ -537,7 +522,7 @@ precompiled_ebpf_function llvm_bpf_jit_context::get_entry_address()
 		std::string buf;
 		raw_string_ostream os(buf);
 		os << err.takeError();
-		SPDLOG_CRITICAL("Unable to find symbol `bpf_main`: {}", buf);
+		SPDLOG_ERROR("Unable to find symbol `bpf_main`: {}", buf);
 		throw std::runtime_error("Unable to link symbol `bpf_main`");
 	} else {
 		auto addr = err->toPtr<precompiled_ebpf_function>();

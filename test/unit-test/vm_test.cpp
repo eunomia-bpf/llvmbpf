@@ -65,7 +65,7 @@ TEST_CASE("Test simple cond")
 
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
 		REQUIRE(vm.get_error_message() ==
-			"Unable to compile eBPF program");
+			"No instructions provided");
 	}
 
 	REQUIRE(vm.load_code((const void *)simple_cond_1,
@@ -96,7 +96,7 @@ TEST_CASE("Test simple cond")
 
 		REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
 		REQUIRE(vm.get_error_message() ==
-			"Unable to compile eBPF program");
+			"No instructions provided");
 	}
 }
 
@@ -136,6 +136,14 @@ TEST_CASE("Test AOT compilation and loading")
 	bpftime::llvmbpf_vm vm;
 	REQUIRE(vm.load_code((const void *)simple_cond_1,
 			     sizeof(simple_cond_1) - 1) == 0);
+
+	SECTION("load invalid AOT object")
+	{
+		std::vector<uint8_t> invalid_object{0x00, 0x01, 0x02, 0x03};
+		auto func = vm.load_aot_object(invalid_object);
+		REQUIRE(!func.has_value());
+		REQUIRE(vm.get_error_message() == "The file was not recognized as a valid object file");
+	}
 
 	SECTION("AOT compile and load")
 	{
@@ -186,7 +194,7 @@ TEST_CASE("Test loading and executing incorrect code") {
         uint64_t mem = 0;
 
         REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);
-        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this is the error message
+        REQUIRE(vm.get_error_message() == "No instructions provided");  // Assuming this is the error message
     }
 
     SECTION("Load and execute incorrect code") {
@@ -196,6 +204,6 @@ TEST_CASE("Test loading and executing incorrect code") {
         uint64_t mem = 0;
 
         REQUIRE(vm.exec(&mem, sizeof(mem), ret) != 0);  // Execution should fail
-        REQUIRE(vm.get_error_message() == "Unable to compile eBPF program");  // Assuming this error message
+        REQUIRE(vm.get_error_message() == "Unsupported or illegal opcode: 0 at pc 0");  // Assuming this error message
     }
 }

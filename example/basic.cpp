@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <cassert>
 #include "llvmbpf.hpp"
 
 using namespace bpftime;
@@ -71,7 +72,7 @@ const unsigned char bpf_function_call_print[] =
 	"\xb7\x00\x00\x00\x00\x00\x00\x00"
 	"\x95\x00\x00\x00\x00\x00\x00\x00";
 
-void run_ebpf_prog(const void *code, size_t code_len)
+uint64_t run_ebpf_prog(const void *code, size_t code_len)
 {
 	uint64_t res = 0;
 	llvmbpf_vm vm;
@@ -96,13 +97,16 @@ void run_ebpf_prog(const void *code, size_t code_len)
 		exit(1);
 	}
 	printf("res = %" PRIu64 "\n", res);
+	return res;
 }
 
 int main(int argc, char *argv[])
 {
-	run_ebpf_prog(bpf_add_mem_64_bit, sizeof(bpf_add_mem_64_bit));
-	run_ebpf_prog(bpf_mul_64_bit, sizeof(bpf_mul_64_bit));
+	assert(run_ebpf_prog(bpf_add_mem_64_bit, sizeof(bpf_add_mem_64_bit)) ==
+	       3433728102);
+	assert(run_ebpf_prog(bpf_mul_64_bit, sizeof(bpf_mul_64_bit)) == 2);
 	// here we use string for the code
-	run_ebpf_prog(bpf_function_call_print, sizeof(bpf_function_call_print) - 1);
+	assert(run_ebpf_prog(bpf_function_call_print,
+			     sizeof(bpf_function_call_print) - 1) == 0);
 	return 0;
 }

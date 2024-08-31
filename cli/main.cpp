@@ -58,6 +58,20 @@ static bool has_argument(int argc, const char **argv, const std::string &option)
 	return false;
 }
 
+uint64_t bpftime_trace_printk(uint64_t fmt, uint64_t fmt_size, ...)
+{
+	const char *fmt_str = (const char *)fmt;
+	va_list args;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wvarargs"
+	va_start(args, fmt_str);
+	long ret = vprintf(fmt_str, args);
+#pragma GCC diagnostic pop
+	va_end(args);
+	return 0;
+}
+
 static int build_ebpf_program(const std::string &ebpf_elf,
 			      const std::filesystem::path &output,
 			      bool emit_llvm)
@@ -130,6 +144,8 @@ static int run_ebpf_program(const std::filesystem::path &elf,
 	file.close();
 
 	llvmbpf_vm vm;
+	vm.register_external_function(6, "bpf_trace_printk",
+					      (void *)bpftime_trace_printk);
 	auto func = vm.load_aot_object(file_buffer);
 	if (!func) {
 		SPDLOG_CRITICAL("Failed to load AOT object from ELF file: {}",

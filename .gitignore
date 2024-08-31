@@ -16,3 +16,5 @@ bpf_conformance
 coverage.info
 example/standalone/standalone
 example/inline/standalone
+example/inline/inline.o
+example/load-llvm-ir/bpf_module.o

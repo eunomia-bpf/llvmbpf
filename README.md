@@ -316,6 +316,8 @@ LD_PRELOAD=build/runtime/syscall-server/libbpftime-syscall-server.so example/xdp
 ./build/tools/aot/bpftime-aot compile --emit_llvm 1>xdp-counter.ll
 ```
 
+You can see [example/xdp-counter.json](example/xdp-counter.json) for an example json file dump by bpftime.
+
 The result xdp-counter.ll can be found in [example/standalone/xdp-counter.ll](example/standalone/xdp-counter.ll).
 
 Then you can write a C code and compile it with the llvm IR:
@@ -431,9 +433,40 @@ Run the code with cli:
 ./build/cli/bpftime-vm run example/inline/inline.o test.bin
 ```
 
+Or you can compile as standalone binary and link with the C code:
+
+```console
+$ clang -O3 example/inline/inline.o example/inline/main.c -o inline
+$ /workspaces/llvmbpf/inline
+calling ebpf program...
+return value = 1
+```
+
 ### Use original LLVM IR from C code
 
-llvmbpf also support using the original LLVM IR from C code.
+eBPF is a instruction set define for verification, but may not be the best for performance.
+
+llvmbpf also support using the original LLVM IR from C code. See [example/load-llvm-ir](example/load-llvm-ir) for an example. You can:
+
+- Compile the C code to eBPF for verify
+- Compile the C code to LLVM IR and native code for execution in the VM.
+
+The C code:
+
+```c
+int _bpf_helper_ext_0006(const char *fmt, ... );
+
+int bpf_main(void* ctx, int size) {
+    _bpf_helper_ext_0006("hello world: %d\n", size);
+    return 0;
+}
+```
+
+You can compile it with `clang -g -c bpf_module.c -o bpf_module.o`, and Run the code with cli:
+
+```c
+./build/cli/bpftime-vm run example/load-llvm-ir/bpf_module.o test.bin
+```
 
 ## Test
 

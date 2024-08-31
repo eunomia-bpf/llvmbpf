@@ -1,0 +1,54 @@
+{
+    "5": {
+        "attr": {
+            "btf_id": 2,
+            "btf_key_type_id": 6,
+            "btf_value_type_id": 6,
+            "btf_vmlinux_value_type_id": 0,
+            "flags": 0,
+            "ifindex": 0,
+            "kernel_bpf_map_id": 0,
+            "key_size": 4,
+            "map_extra": 0,
+            "map_type": 2,
+            "max_entries": 2,
+            "value_size": 4
+        },
+        "name": "ctl_array",
+        "type": "bpf_map_handler"
+    },
+    "6": {
+        "attr": {
+            "btf_id": 2,
+            "btf_key_type_id": 0,
+            "btf_value_type_id": 22,
+            "btf_vmlinux_value_type_id": 0,
+            "flags": 1024,
+            "ifindex": 0,
+            "kernel_bpf_map_id": 0,
+            "key_size": 4,
+            "map_extra": 0,
+            "map_type": 2,
+            "max_entries": 1,
+            "value_size": 4096
+        },
+        "name": "xdp_coun.bss",
+        "type": "bpf_map_handler"
+    },
+    "7": {
+        "attr": {
+            "cnt": 37,
+            "insns": "79160000000000007917080000000000b701000000000000631afcff00000000bfa200000000000007020000fcffffff181100000500000000000000000000008500000001000000bf01000000000000b70000000200000015011800000000006111000000000000550116000000000018210000060000000000000000000000791200000000000007020000010000007b21000000000000b700000001000000bf61000000000000070100000e0000002d710d0000000000696100000000000069620600000000006b26000000000000696208000000000069630200000000006b360800000000006b2602000000000069620a000000000069630400000000006b360a00000000006b160600000000006b26040000000000b7000000030000009500000000000000",
+            "type": -317813312
+        },
+        "name": "xdp_pass",
+        "type": "bpf_prog_handler"
+    },
+    "8": {
+        "attr": {
+            "prog_fd": 7,
+            "target_fd": 5
+        },
+        "type": "bpf_link_handler"
+    }
+}

@@ -24,6 +24,10 @@ For a comprehensive userspace eBPF runtime that includes support for maps, helpe
     - [Use llvmbpf as a AOT compiler](#use-llvmbpf-as-a-aot-compiler)
     - [load eBPF bytecode from ELF file](#load-ebpf-bytecode-from-elf-file)
     - [Maps and data relocation support](#maps-and-data-relocation-support)
+    - [Build into standalone binary for deployment](#build-into-standalone-binary-for-deployment)
+  - [optimizaion](#optimizaion)
+    - [inline the maps and helper function](#inline-the-maps-and-helper-function)
+    - [Use original LLVM IR from C code](#use-original-llvm-ir-from-c-code)
   - [Test](#test)
     - [Unit test](#unit-test)
     - [Test with bpf-conformance](#test-with-bpf-conformance)
@@ -68,12 +72,19 @@ void run_ebpf_prog(const void *code, size_t code_len)
 
 ### Use llvmbpf as a AOT compiler
 
+Build with cli:
+
+```sh
+sudo apt-get install libelf1 libelf-dev
+cmake -B build  -DBUILD_LLVM_AOT_CLI=1 
+```
+
 You can use the cli to generate the LLVM IR from eBPF bytecode:
 
 ```console
 # ./build/cli/bpftime-vm build .github/assets/sum.bpf.o -emit-llvm > test.bpf.ll
 # opt -O3 -S test.bpf.ll -opaque-pointers  -o test.opt.ll
-# cat test.opt.ll 
+# cat test.opt.ll
 ; ModuleID = 'test.bpf.ll'
 source_filename = "bpf-jit"
 
@@ -123,6 +134,8 @@ Load and run a AOTed eBPF program:
 [2024-08-10 14:57:16.986] [info] [llvm_jit_context.cpp:392] LLVM-JIT: Loading aot object
 [2024-08-10 14:57:16.991] [info] [main.cpp:136] Program executed successfully. Return value: 6
 ```
+
+See [Build into standalone binary for deployment](#build-into-standalone-binary-for-deployment) for more details.
 
 ### load eBPF bytecode from ELF file
 
@@ -279,6 +292,181 @@ Reference:
 
 - <https://prototype-kernel.readthedocs.io/en/latest/bpf/ebpf_maps.html>
 - <https://www.ietf.org/archive/id/draft-ietf-bpf-isa-00.html#name-64-bit-immediate-instructio>
+
+### Build into standalone binary for deployment
+
+You can build the eBPF program into a standalone binary, which does not rely on any external libraries, and can be exec like nomal c code with helper and maps support.
+
+This can help:
+
+- Easily deploy the eBPF program to any machine without the need to install any dependencies.
+- Avoid the overhead of loading the eBPF bytecode and maps at runtime.
+- Suitable for microcontroller or embedded systems, which does not have a OS.
+
+Take [https://github.com/eunomia-bpf/bpftime/blob/master/example/xdp-counter/](https://github.com/eunomia-bpf/bpftime/blob/master/example/xdp-counter/) as an example:
+
+In the bpftime project:
+
+```sh
+# load the eBPF program with bpftime
+LD_PRELOAD=build/runtime/syscall-server/libbpftime-syscall-server.so example/xdp-counter/xdp-counter example/xdp-counter/.output/xdp-counter.bpf.o veth1
+# dump the map and eBPF bytecode define
+./build/tools/bpftimetool/bpftimetool export res.json
+# build the eBPF program into llvm IR
+./build/tools/aot/bpftime-aot compile --emit_llvm 1>xdp-counter.ll
+```
+
+You can see [example/xdp-counter.json](example/xdp-counter.json) for an example json file dump by bpftime.
+
+The result xdp-counter.ll can be found in [example/standalone/xdp-counter.ll](example/standalone/xdp-counter.ll).
+
+Then you can write a C code and compile it with the llvm IR:
+
+```c
+#include <stdint.h>
+#include <stdio.h>
+#include <inttypes.h>
+
+int bpf_main(void* ctx, uint64_t size);
+
+uint32_t ctl_array[2] = { 0, 0 };
+uint64_t cntrs_array[2] = { 0, 0 };
+
+void *_bpf_helper_ext_0001(uint64_t map_fd, void *key)
+{
+  printf("bpf_map_lookup_elem %lu\n", map_fd);
+  if (map_fd == 5) {
+    return &ctl_array[*(uint32_t *)key];
+  } else if (map_fd == 6) {
+    return &cntrs_array[*(uint32_t *)key];
+  } else {
+    return NULL;
+  }
+  return 0;
+}
+
+void* __lddw_helper_map_val(uint64_t val)
+{
+    printf("map_val %lu\n", val);
+    if (val == 5) {
+        return (void *)ctl_array;
+    } else if (val == 6) {
+        return (void *)cntrs_array;
+    } else {
+        return NULL;
+    }
+}
+
+uint8_t bpf_mem[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
+
+int main() {
+    printf("The value of cntrs_array[0] is %" PRIu64 "\n", cntrs_array[0]);
+    printf("calling ebpf program...\n");
+    bpf_main(bpf_mem, sizeof(bpf_mem));
+    printf("The value of cntrs_array[0] is %" PRIu64 "\n", cntrs_array[0]);
+    printf("calling ebpf program...\n");
+    bpf_main(bpf_mem, sizeof(bpf_mem));
+    printf("The value of cntrs_array[0] is %" PRIu64 "\n", cntrs_array[0]);
+    return 0;
+}
+```
+
+Compile the C code with the llvm IR:
+
+```sh
+clang -g main.c xdp-counter.ll -o standalone 
+```
+
+And you can run the `standalone` eBPF program directly.
+
+## optimizaion
+
+Based on the AOT compiler, we can apply some optimization strategies:
+
+### inline the maps and helper function
+
+Inline the maps and helper function into the eBPF program, so that the eBPF program can be optimized with `const propagation`, `dead code elimination`, etc by the LLVM optimizer. llvmbpf can also eliminate the cost of function calls.
+
+Prepare a C code:
+
+```c
+
+uint32_t ctl_array[2] = { 0, 0 };
+uint64_t cntrs_array[2] = { 0, 0 };
+
+void *_bpf_helper_ext_0001(uint64_t map_fd, void *key)
+{
+  if (map_fd == 5) {
+    return &ctl_array[*(uint32_t *)key];
+  } else if (map_fd == 6) {
+    return &cntrs_array[*(uint32_t *)key];
+  } else {
+    return NULL;
+  }
+  return 0;
+}
+
+void* __lddw_helper_map_val(uint64_t val)
+{
+    if (val == 5) {
+        return (void *)ctl_array;
+    } else if (val == 6) {
+        return (void *)cntrs_array;
+    } else {
+        return NULL;
+    }
+}
+```
+
+Merge the modules with `llvm-link` and inline them:
+
+```sh
+clang -S -O3 -emit-llvm libmap.c -o libmap.ll
+llvm-link -S -o xdp-counter-inline.ll xdp-counter.ll libmap.ll
+opt --always-inline -S xdp-counter-inline.ll -o xdp-counter-inline.ll
+clang -O3 -g -c xdp-counter-inline.ll -o inline.o
+```
+
+Run the code with cli:
+
+```c
+./build/cli/bpftime-vm run example/inline/inline.o test.bin
+```
+
+Or you can compile as standalone binary and link with the C code:
+
+```console
+$ clang -O3 example/inline/inline.o example/inline/main.c -o inline
+$ /workspaces/llvmbpf/inline
+calling ebpf program...
+return value = 1
+```
+
+### Use original LLVM IR from C code
+
+eBPF is a instruction set define for verification, but may not be the best for performance.
+
+llvmbpf also support using the original LLVM IR from C code. See [example/load-llvm-ir](example/load-llvm-ir) for an example. You can:
+
+- Compile the C code to eBPF for verify
+- Compile the C code to LLVM IR and native code for execution in the VM.
+
+The C code:
+
+```c
+int _bpf_helper_ext_0006(const char *fmt, ... );
+
+int bpf_main(void* ctx, int size) {
+    _bpf_helper_ext_0006("hello world: %d\n", size);
+    return 0;
+}
+```
+
+You can compile it with `clang -g -c bpf_module.c -o bpf_module.o`, and Run the code with cli:
+
+```c
+./build/cli/bpftime-vm run example/load-llvm-ir/bpf_module.o test.bin
+```
 
 ## Test
 

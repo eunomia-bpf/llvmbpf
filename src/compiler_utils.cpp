@@ -36,11 +36,9 @@ llvm::Value *emitLoadALUDest(const ebpf_inst &inst, llvm::Value **regs,
 			     llvm::IRBuilder<> &builder, bool dstAlways64)
 {
 	if (((inst.opcode & 0x07) == EBPF_CLS_ALU64) || dstAlways64) {
-		return builder.CreateLoad(builder.getInt64Ty(),
-					  regs[inst.dst]);
+		return builder.CreateLoad(builder.getInt64Ty(), regs[inst.dst]);
 	} else {
-		return builder.CreateLoad(builder.getInt32Ty(),
-					  regs[inst.dst]);
+		return builder.CreateLoad(builder.getInt32Ty(), regs[inst.dst]);
 	}
 }
 
@@ -101,7 +99,15 @@ emitALUEndianConversion(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 		// We haven't take cast to little endian
 		// into consideration, because we only
 		// like little-endian machines
-		return dst_val;
+		// Truncation is needed
+		if (inst.imm == 16) {
+			return builder.CreateTrunc(dst_val,
+						   builder.getInt16Ty());
+		} else if (inst.imm == 32) {
+			return builder.CreateTrunc(dst_val,
+						   builder.getInt32Ty());
+		} else
+			return dst_val;
 	}
 }
 
@@ -120,8 +126,7 @@ llvm::Value *emitStoreLoadingSrc(const ebpf_inst &inst,
 				 llvm::IRBuilder<> &builder, llvm::Value **regs)
 {
 	if ((inst.opcode & 0x07) == EBPF_CLS_STX) {
-		return builder.CreateLoad(builder.getInt64Ty(),
-					  regs[inst.src]);
+		return builder.CreateLoad(builder.getInt64Ty(), regs[inst.src]);
 	} else {
 		return builder.getInt64(inst.imm);
 	}
@@ -131,11 +136,10 @@ void emitStoreWritingResult(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 			    llvm::Value **regs, llvm::Value *result)
 {
 	builder.CreateStore(
-		result,
-		builder.CreateGEP(builder.getInt8Ty(),
-				  builder.CreateLoad(builder.getPtrTy(),
-						     regs[inst.dst]),
-				  { builder.getInt64(inst.offset) }));
+		result, builder.CreateGEP(builder.getInt8Ty(),
+					  builder.CreateLoad(builder.getPtrTy(),
+							     regs[inst.dst]),
+					  { builder.getInt64(inst.offset) }));
 }
 
 void emitStore(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
@@ -163,8 +167,7 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 		} else {
 			src = builder.getInt32(inst.imm);
 		}
-		dst = builder.CreateLoad(builder.getInt32Ty(),
-					 regs[inst.dst]);
+		dst = builder.CreateLoad(builder.getInt32Ty(), regs[inst.dst]);
 		zero = builder.getInt32(0);
 	} else {
 		// JMP64
@@ -174,8 +177,7 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 		} else {
 			src = builder.getInt64(inst.imm);
 		}
-		dst = builder.CreateLoad(builder.getInt64Ty(),
-					 regs[inst.dst]);
+		dst = builder.CreateLoad(builder.getInt64Ty(), regs[inst.dst]);
 		zero = builder.getInt64(0);
 	}
 	return { src, dst, zero };

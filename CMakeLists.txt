@@ -77,13 +77,7 @@ endif()
 
 # if BPFTIME_LLVM_JIT is set, then it's built in the bpftime project.
 # If not, it's built as a standalone library.
-if(${BPFTIME_LLVM_JIT})
-    # build cli in the main project because it relies on libbpf
     add_subdirectory(cli)
-else()
-    if(${BUILD_LLVM_AOT_CLI})
-        add_subdirectory(cli)
-    endif()
 
     if(${BPFTIME_ENABLE_UNIT_TESTING})
         if (NOT TARGET Catch2)
@@ -98,7 +92,6 @@ else()
             FetchContent_MakeAvailable(Catch2)
         endif()
     endif()
-endif()
 
 message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
 

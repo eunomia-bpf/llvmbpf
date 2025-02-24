@@ -126,7 +126,7 @@ main(int argc, char** argv)
         }
     }
 
-    struct ebpf_vm* vm = ebpf_create();
+    struct ebpf_vm* vm = ebpf_create("llvm");
     if (!vm) {
         fprintf(stderr, "Failed to create VM\n");
         return 1;

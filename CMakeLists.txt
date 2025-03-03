@@ -83,7 +83,7 @@ endif()
 if(${BPFTIME_LLVM_JIT})
     add_subdirectory(cli)
 else()
-    if($(BUILD_LLVM_AOT_CLI))
+    if(${BUILD_LLVM_AOT_CLI})
         add_subdirectory(cli)
     endif()
 

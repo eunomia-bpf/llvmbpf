@@ -29,7 +29,7 @@ jobs:
       run: |
         git clone https://github.com/Alan-Jowett/bpf_conformance --recursive
         cd bpf_conformance
-        git checkout ffdf78d8fce98790f1a0a78c59a376c0c68c617a
+        git checkout bb9f745ef53eb0568eb1ffc772d9a0e434b17755
         cmake . -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build --target bpf_conformance_runner
 

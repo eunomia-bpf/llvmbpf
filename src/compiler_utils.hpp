@@ -31,6 +31,11 @@ static inline bool is_jmp(const ebpf_inst &insn)
 	return (insn.opcode & 0x07) == EBPF_CLS_JMP ||
 	       (insn.opcode & 0x07) == EBPF_CLS_JMP32;
 }
+
+static inline bool is_imm_jmp(const ebpf_inst &inst)
+{
+	return inst.opcode == EBPF_OP_JA_IMM;
+}
 static inline std::string ext_func_sym(uint32_t idx)
 {
 	char buf[32];
@@ -73,7 +78,8 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 
 llvm::Expected<llvm::BasicBlock *>
 loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
-		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks);
+		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+		bool useOffset);
 llvm::Expected<llvm::BasicBlock *>
 loadCallDstBlock(uint16_t pc, const ebpf_inst &inst,
 		 const std::map<uint16_t, llvm::BasicBlock *> &instBlocks);

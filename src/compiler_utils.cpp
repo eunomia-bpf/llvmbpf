@@ -59,17 +59,28 @@ llvm::Expected<llvm::Value *>
 emitALUEndianConversion(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 			llvm::Value *dst_val)
 {
-	// TODO: Support 64bit conversion
+	if (inst.imm != 16 && inst.imm != 32 && inst.imm != 64) {
+		return llvm::make_error<llvm::StringError>(
+			"Unexpected endian size: " + std::to_string(inst.imm),
+			llvm::inconvertibleErrorCode());
+	}
+	// ALU64 marks convert between host endian and the opposite
+	// endian
+
+	bool need_reverse = false;
+
+	if (is_alu64(inst)) {
+		need_reverse = true;
+	} else {
+		if ((inst.opcode & 0x08) == 0x08) {
+			need_reverse = true;
+		}
+	}
 	//  Convert to big endian
-	if ((inst.opcode & 0x08) == 0x08) {
+	if (need_reverse) {
 		// Split bytes of the dst register
 		std::vector<llvm::Value *> bytes;
-		if (inst.imm != 16 && inst.imm != 32 && inst.imm != 64) {
-			return llvm::make_error<llvm::StringError>(
-				"Unexpected endian size: " +
-					std::to_string(inst.imm),
-				llvm::inconvertibleErrorCode());
-		}
+
 		for (int i = 0; i < inst.imm; i += 8) {
 			bytes.push_back(builder.CreateAnd(
 				builder.CreateLShr(dst_val,
@@ -185,10 +196,12 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 
 llvm::Expected<llvm::BasicBlock *>
 loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
-		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
+		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+		bool useOffset)
 {
-	SPDLOG_TRACE("pc {} request jump to {}", pc, pc + 1 + inst.offset);
-	uint16_t dstBlkId = pc + 1 + inst.offset;
+	SPDLOG_TRACE("pc {} request jump to {}", pc,
+		     pc + 1 + (useOffset ? inst.offset : inst.imm));
+	uint16_t dstBlkId = pc + 1 + (useOffset ? inst.offset : inst.imm);
 	if (auto itr = instBlocks.find(dstBlkId); itr != instBlocks.end()) {
 		return itr->second;
 	} else {
@@ -236,7 +249,7 @@ llvm::Expected<std::pair<llvm::BasicBlock *, llvm::BasicBlock *> >
 localJmpDstAndNextBlk(uint16_t pc, const ebpf_inst &inst,
 		      const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
 {
-	if (auto dst = loadJmpDstBlock(pc, inst, instBlocks); dst) {
+	if (auto dst = loadJmpDstBlock(pc, inst, instBlocks, true); dst) {
 		if (auto next = loadJmpNextBlock(pc, inst, instBlocks); next) {
 			return std::make_pair(dst.get(), next.get());
 		} else {

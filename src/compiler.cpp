@@ -149,7 +149,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			blockBegin[i] = true;
 			SPDLOG_TRACE("mark {} block begin", i);
 		}
-		if (is_jmp(curr)) {
+		if (is_imm_jmp(curr)) {
+			SPDLOG_TRACE("mark {} block begin", i + curr.imm + 1);
+			blockBegin[i + curr.imm + 1] = true;
+		} else if (is_jmp(curr)) {
 			SPDLOG_TRACE("mark {} block begin", i + curr.off + 1);
 			blockBegin[i + curr.offset + 1] = true;
 		}
@@ -367,29 +370,98 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		case EBPF_OP_DIV_REG: {
 			// Set dst to zero if trying to being divided by
 			// zero
-
-			emitALUWithDstAndSrc(
-				inst, builder, &regs[0],
-				[&](Value *dst_val, Value *src_val) {
-					bool is64 = (inst.opcode & 0x07) ==
-						    EBPF_CLS_ALU64;
-					auto result = builder.CreateSelect(
-						builder.CreateICmpEQ(
-							src_val,
-							is64 ? builder.getInt64(
-								       0) :
-							       builder.getInt32(
-								       0)),
+			{
+				emitALUWithDstAndSrc(inst, builder, &regs[0], [&](Value *dst_val, Value *src_val) {
+					bool is_64 = is_alu64(inst);
+					bool is_sdiv = inst.offset == 1;
+					auto src_is_zero = builder.CreateICmpEQ(
+						src_val,
+						is_64 ? builder.getInt64(0) :
+							builder.getInt32(0));
+					auto zero =
 						is_alu64(inst) ?
 							builder.getInt64(0) :
-							builder.getInt32(0),
-						builder.CreateUDiv(dst_val,
-								   src_val));
-					return result;
+							builder.getInt32(0);
+					Value *result;
+					if (is_64) {
+						if (is_sdiv) {
+							/**
+							  If
+is_64 is true, src_val will be zero-extended to 64-bit. According to
+eBPF docs, it should actually be sign-extended to 64-bit, so we perform
+this conversion.
+							 */
+							src_val = builder.CreateSExt(
+								builder.CreateTrunc(
+									src_val,
+									builder.getInt32Ty()),
+								builder.getInt64Ty());
+							// dst = I64_MIN and src
+							// = -1? Overflow!
+							auto overflow_cond = builder.CreateAnd(
+								{ builder.CreateCmp(
+									  CmpInst::Predicate::
+										  ICMP_EQ,
+									  dst_val,
+									  builder.getInt64(
+										  INT64_MIN)),
+								  builder.CreateCmp(
+									  CmpInst::Predicate::
+										  ICMP_EQ,
+									  src_val,
+									  builder.getInt64(
+										  -1)) });
+							result = builder.CreateSelect(
+								overflow_cond,
+								builder.getInt64(
+									INT64_MIN),
+								builder.CreateSDiv(
+									dst_val,
+									src_val));
+						} else {
+							result =
+								builder.CreateUDiv(
+									dst_val,
+									src_val);
+						}
+					} else {
+						if (is_sdiv) {
+							// dst = I64_MIN and src
+							// = -1? Overflow!
+							auto overflow_cond = builder.CreateAnd(
+								{ builder.CreateCmp(
+									  CmpInst::Predicate::
+										  ICMP_EQ,
+									  dst_val,
+									  builder.getInt32(
+										  INT32_MIN)),
+								  builder.CreateCmp(
+									  CmpInst::Predicate::
+										  ICMP_EQ,
+									  src_val,
+									  builder.getInt32(
+										  -1)) });
+							result = builder.CreateSelect(
+								overflow_cond,
+								builder.getInt32(
+									INT32_MIN),
+								builder.CreateSDiv(
+									dst_val,
+									src_val));
+						} else {
+							result =
+								builder.CreateUDiv(
+									dst_val,
+									src_val);
+						}
+					}
+
+					return builder.CreateSelect(
+						src_is_zero, zero, result);
 				});
 
-			;
-			break;
+				break;
+			}
 		}
 		case EBPF_OP_OR64_IMM:
 		case EBPF_OP_OR_IMM:
@@ -470,23 +542,33 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		case EBPF_OP_MOD_IMM:
 		case EBPF_OP_MOD64_REG:
 		case EBPF_OP_MOD_REG: {
-			emitALUWithDstAndSrc(
-				inst, builder, &regs[0],
-				[&](Value *dst_val, Value *src_val) {
-					// Keep dst untouched is src is
-					// zero
-					return builder.CreateSelect(
-						builder.CreateICmpEQ(
-							src_val,
-							is_alu64(inst) ?
-								builder.getInt64(
-									0) :
-								builder.getInt32(
-									0)),
-						dst_val,
+			bool is_smod = inst.offset == 1;
+			bool is_64 = is_alu64(inst);
+			emitALUWithDstAndSrc(inst, builder, &regs[0], [&](Value *dst_val, Value *src_val) {
+				// Keep dst untouched is src is
+				// zero
+				return builder.CreateSelect(
+					builder.CreateICmpEQ(
+						src_val,
+						is_alu64(inst) ?
+							builder.getInt64(0) :
+							builder.getInt32(0)),
+					dst_val,
+					is_smod ?
+						builder.CreateSRem(
+							is_64 ? builder.CreateSExt(
+									dst_val,
+									builder.getInt64Ty()) :
+								dst_val,
+							is_64 ? builder.CreateSExt(
+									builder.CreateTrunc(
+										src_val,
+										builder.getInt32Ty()),
+									builder.getInt64Ty()) :
+								src_val) :
 						builder.CreateURem(dst_val,
 								   src_val));
-				});
+			});
 
 			break;
 		}
@@ -506,12 +588,62 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		case EBPF_OP_MOV_IMM:
 		case EBPF_OP_MOV64_REG:
 		case EBPF_OP_MOV_REG: {
+			bool is_mov_sx = inst.offset != 0;
 			Value *src_val =
 				emitLoadALUSource(inst, &regs[0], builder);
-			Value *result = src_val;
+			Value *result;
+			if (is_mov_sx) {
+				// for alu64: dst = (u64)(s64)(sOFFSET)src
+				// for alu(32): dst = (u32)(s32)(sOFFSET)src
+				Value *extended_result;
+				if (inst.offset == 8) {
+					extended_result = builder.CreateSExt(
+						builder.CreateTrunc(
+							src_val,
+							builder.getInt8Ty()),
+						builder.getInt8Ty());
+				} else if (inst.offset == 16) {
+					extended_result = builder.CreateSExt(
+						builder.CreateTrunc(
+							src_val,
+							builder.getInt16Ty()),
+						builder.getInt16Ty());
+				} else if (inst.offset == 32) {
+					extended_result = builder.CreateSExt(
+						builder.CreateTrunc(
+							src_val,
+							builder.getInt32Ty()),
+						builder.getInt32Ty());
+				} else {
+					return llvm::make_error<
+						llvm::StringError>(
+						"Invalid offset " +
+							std::to_string(
+								inst.offset) +
+							" for movsx at pc " +
+							std::to_string(pc),
+						llvm::inconvertibleErrorCode());
+				}
+				if (is_alu64(inst)) {
+					// convert it to u64  is not needed,
+					// llvm ir uses unsigned numbers
+					result = builder.CreateCast(
+						Instruction::CastOps::SExt,
+						extended_result,
+						builder.getInt64Ty());
+				} else {
+					result = builder.CreateCast(
+						Instruction::CastOps::SExt,
+						extended_result,
+						builder.getInt32Ty());
+				}
+			} else {
+				result = src_val;
+			}
 			emitStoreALUResult(inst, &regs[0], builder, result);
 			break;
 		}
+
 		case EBPF_OP_ARSH64_IMM:
 		case EBPF_OP_ARSH_IMM:
 		case EBPF_OP_ARSH64_REG:
@@ -534,7 +666,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			break;
 		}
 		case EBPF_OP_LE:
-		case EBPF_OP_BE: {
+		case EBPF_OP_BE:
+		case EBPF_OP_BYTESWAP: {
 			Value *dst_val =
 				emitLoadALUDest(inst, &regs[0], builder, true);
 			Value *result;
@@ -831,7 +964,20 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		}
 			// JMP
 		case EBPF_OP_JA: {
-			if (auto dst = loadJmpDstBlock(pc, inst, instBlocks);
+			if (auto dst =
+				    loadJmpDstBlock(pc, inst, instBlocks, true);
+			    dst) {
+				builder.CreateBr(dst.get());
+
+			} else {
+				return dst.takeError();
+			}
+			break;
+		}
+		// JMP imm
+		case EBPF_OP_JA_IMM: {
+			if (auto dst = loadJmpDstBlock(pc, inst, instBlocks,
+						       false);
 			    dst) {
 				builder.CreateBr(dst.get());
 
@@ -1167,7 +1313,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			builder.CreateBr(allBlocks[i + 1]);
 		}
 	}
-	if (verifyModule(*jitModule, &dbgs())) {
+	std::string buffer;
+	llvm::raw_string_ostream stream(buffer);
+	if (verifyModule(*jitModule, &stream)) {
+		SPDLOG_ERROR("Failed to verify module: {}", buffer);
 		return llvm::make_error<llvm::StringError>(
 			"Invalid module generated",
 			llvm::inconvertibleErrorCode());

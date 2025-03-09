@@ -144,7 +144,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	blockBegin[0] = true;
 	for (uint16_t i = 0; i < insts.size(); i++) {
 		auto curr = insts[i];
-		SPDLOG_TRACE("check pc {} opcode={} ", i, (uint16_t)curr.opcode);
+		SPDLOG_TRACE("check pc {} opcode={} ", i,
+			     (uint16_t)curr.opcode);
 		if (i > 0 && is_jmp(insts[i - 1])) {
 			blockBegin[i] = true;
 			SPDLOG_TRACE("mark {} block begin", i);
@@ -153,7 +154,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			SPDLOG_TRACE("mark {} block begin", i + curr.imm + 1);
 			blockBegin[i + curr.imm + 1] = true;
 		} else if (is_jmp(curr)) {
-			SPDLOG_TRACE("mark {} block begin", i + curr.off + 1);
+			SPDLOG_TRACE("mark {} block begin",
+				     i + curr.offset + 1);
 			blockBegin[i + curr.offset + 1] = true;
 		}
 	}

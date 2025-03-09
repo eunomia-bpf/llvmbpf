@@ -10,6 +10,14 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+if(NOT DEFINED SPDLOG_ACTIVE_LEVEL)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+  else()
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
+  endif()
+endif()
+
 function(bpftime_setup_target target)
     set_property(TARGET ${target} PROPERTY CXX_STANDARD 20)
     target_include_directories(${target}

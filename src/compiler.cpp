@@ -91,8 +91,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	bool patch_map_val_at_compile_time, bool main_func_with_arguments,
 	const std::string &func_name, bool is_cuda)
 {
-	SPDLOG_DEBUG("Generating module: patch_map_val_at_compile_time={}",
-		     patch_map_val_at_compile_time);
+	SPDLOG_DEBUG(
+		"Generating module: patch_map_val_at_compile_time={}, with arguments={}, func_name={}, is_cuda={}",
+		patch_map_val_at_compile_time, main_func_with_arguments,
+		func_name, is_cuda);
 	auto context = std::make_unique<LLVMContext>();
 	auto jitModule = std::make_unique<Module>("bpf-jit", *context);
 	const auto &insts = vm.instructions;
@@ -211,6 +213,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			"stackEnd");
 		// Write stack pointer into r10
 		builder.CreateStore(stackEnd, regs[10]);
+
+		callStack = builder.CreateAlloca(
+			builder.getPtrTy(),
+			builder.getInt32(CALL_STACK_SIZE * 5), "callStack");
+		callItemCnt = builder.CreateAlloca(builder.getInt64Ty(),
+						   nullptr, "callItemCnt");
+		builder.CreateStore(builder.getInt64(0), callItemCnt);
 		if (main_func_with_arguments) {
 			// Get args of uint64_t bpf_main(uint64_t, uint64_t)
 			llvm::Argument *mem = bpf_func->getArg(0);
@@ -221,14 +230,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			// Write memory len into r1
 			builder.CreateStore(mem_len, regs[2]);
 		}
-
-		callStack = builder.CreateAlloca(
-			builder.getPtrTy(),
-			builder.getInt32(CALL_STACK_SIZE * 5), "callStack");
-		callItemCnt = builder.CreateAlloca(builder.getInt64Ty(),
-						   nullptr, "callItemCnt");
-		builder.CreateStore(builder.getInt64(0), callItemCnt);
 	}
+
 	// These blocks are the next instructions of the returning target of
 	// local functions
 	std::map<uint16_t, BlockAddress *> localFuncRetBlks;

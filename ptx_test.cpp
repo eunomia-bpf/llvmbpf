@@ -1,3 +1,4 @@
+#include "build/_deps/spdlog-src/include/spdlog/cfg/env.h"
 #include <cassert>
 #include <csignal>
 #include <cstdint>
@@ -359,6 +360,7 @@ static std::string load_local_ptx()
 }
 int main()
 {
+	spdlog::cfg::load_env_levels();
 	signal(SIGINT, signal_handler);
 	llvm::InitializeAllTargetInfos(); // 初始化 TargetInfo
 	llvm::InitializeAllTargets(); // 初始化 Target (注册 Target 对象)

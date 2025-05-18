@@ -62,7 +62,8 @@ class llvm_bpf_jit_context {
 	std::vector<uint8_t> do_aot_compile(bool print_ir = false);
 	llvm::Error load_aot_object(const std::vector<uint8_t> &buf);
 	std::optional<std::string>
-	generate_ptx(const char *target_cpu = "sm_60");
+	generate_ptx(const std::string &func_name = "bpf_main",
+		     const char *target_cpu = "sm_60");
 };
 
 std::string get_trampoline_ptx();

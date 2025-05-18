@@ -420,7 +420,7 @@ llvm_bpf_jit_context::load_aot_object(const std::vector<uint8_t> &buf)
 }
 static ExitOnError exitOnErr;
 std::tuple<std::unique_ptr<llvm::orc::LLJIT>, std::vector<std::string>,
-	   std::vector<std::string> >
+	   std::vector<std::string>>
 llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 {
 	// Create a JIT builder
@@ -551,7 +551,8 @@ createNVPTXTargetMachine(const char *target_cpu)
 		triple.str(), target_cpu, "", options, llvm::Reloc::Static));
 }
 std::optional<std::string>
-llvm_bpf_jit_context::generate_ptx(const char *target_cpu)
+llvm_bpf_jit_context::generate_ptx(const std::string &func_name,
+				   const char *target_cpu)
 {
 	spin_lock_guard guard(compiling.get());
 	auto targetMachine = createNVPTXTargetMachine(target_cpu);
@@ -579,8 +580,8 @@ llvm_bpf_jit_context::generate_ptx(const char *target_cpu)
 	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
 	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
 
-	auto bpfModuleOrErr =
-		generateModule(extFuncNames, definedLddwHelpers, true, true);
+	auto bpfModuleOrErr = generateModule(extFuncNames, definedLddwHelpers,
+					     true, func_name, true);
 	if (!bpfModuleOrErr) {
 		exitOnErr(bpfModuleOrErr.takeError());
 		return {};

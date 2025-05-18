@@ -42,6 +42,7 @@ class llvm_bpf_jit_context {
 	generateModule(const std::vector<std::string> &extFuncNames,
 		       const std::vector<std::string> &lddwHelpers,
 		       bool patch_map_val_at_compile_time,
+		       const std::string &func_name = "bpf_main",
 		       bool is_cuda = false);
 	std::vector<uint8_t>
 	do_aot_compile(const std::vector<std::string> &extFuncNames,
@@ -49,11 +50,11 @@ class llvm_bpf_jit_context {
 		       bool print_ir);
 	// (JIT, extFuncs, definedLddwSymbols)
 	std::tuple<std::unique_ptr<llvm::orc::LLJIT>, std::vector<std::string>,
-		   std::vector<std::string> >
+		   std::vector<std::string>>
 	create_and_initialize_lljit_instance();
 
     public:
-	std::optional<std::unique_ptr<llvm::orc::LLJIT> > jit;
+	std::optional<std::unique_ptr<llvm::orc::LLJIT>> jit;
 	llvm::Error do_jit_compile();
 	llvm_bpf_jit_context(llvmbpf_vm &vm);
 	virtual ~llvm_bpf_jit_context();

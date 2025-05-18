@@ -87,7 +87,8 @@ const size_t MAX_LOCAL_FUNC_DEPTH = 32;
 Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	const std::vector<std::string> &extFuncNames,
 	const std::vector<std::string> &lddwHelpers,
-	bool patch_map_val_at_compile_time, bool is_cuda)
+	bool patch_map_val_at_compile_time, const std::string &func_name,
+	bool is_cuda)
 {
 	SPDLOG_DEBUG("Generating module: patch_map_val_at_compile_time={}",
 		     patch_map_val_at_compile_time);
@@ -171,7 +172,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 					    llvm::Type::getInt8Ty(*context)),
 				    Type::getInt64Ty(*context) },
 				  false),
-		Function::ExternalLinkage, "bpf_main", jitModule.get());
+		Function::ExternalLinkage, func_name, jitModule.get());
 
 	// Get args of uint64_t bpf_main(uint64_t, uint64_t)
 	llvm::Argument *mem = bpf_func->getArg(0);

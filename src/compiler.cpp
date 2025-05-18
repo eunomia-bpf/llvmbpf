@@ -9,6 +9,7 @@
 #include "spdlog/spdlog.h"
 #include <cassert>
 #include <cstdint>
+#include <llvm-20/llvm/IR/DerivedTypes.h>
 #include <llvm/Support/Alignment.h>
 #include <llvm/Support/AtomicOrdering.h>
 #include <llvm/Support/Error.h>
@@ -87,7 +88,9 @@ const size_t MAX_LOCAL_FUNC_DEPTH = 32;
 Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	const std::vector<std::string> &extFuncNames,
 	const std::vector<std::string> &lddwHelpers,
-	bool patch_map_val_at_compile_time, const std::string &func_name,
+	bool patch_map_val_at_compile_time,
+	bool main_func_with_arguments,
+	const std::string &func_name,
 	bool is_cuda)
 {
 	SPDLOG_DEBUG("Generating module: patch_map_val_at_compile_time={}",
@@ -163,15 +166,23 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			blockBegin[i + curr.offset + 1] = true;
 		}
 	}
-
-	// The main function
-	Function *bpf_func = Function::Create(
-		FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
+	FunctionType* func_ty;
+	if(main_func_with_arguments) {
+		func_ty = FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
 					    Type::getInt64Ty(*context),
 				  { llvm::PointerType::getUnqual(
 					    llvm::Type::getInt8Ty(*context)),
 				    Type::getInt64Ty(*context) },
-				  false),
+				  false);
+	} else {
+		func_ty = FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
+					    Type::getInt64Ty(*context),
+				  {  },
+				  false);
+	}
+	// The main function
+	Function *bpf_func = Function::Create(
+		func_ty,
 		Function::ExternalLinkage, func_name, jitModule.get());
 
 	// Get args of uint64_t bpf_main(uint64_t, uint64_t)

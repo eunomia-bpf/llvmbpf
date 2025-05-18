@@ -42,6 +42,7 @@ class llvm_bpf_jit_context {
 	generateModule(const std::vector<std::string> &extFuncNames,
 		       const std::vector<std::string> &lddwHelpers,
 		       bool patch_map_val_at_compile_time,
+		       bool main_func_with_arguments = true,
 		       const std::string &func_name = "bpf_main",
 		       bool is_cuda = false);
 	std::vector<uint8_t>
@@ -62,7 +63,8 @@ class llvm_bpf_jit_context {
 	std::vector<uint8_t> do_aot_compile(bool print_ir = false);
 	llvm::Error load_aot_object(const std::vector<uint8_t> &buf);
 	std::optional<std::string>
-	generate_ptx(const std::string &func_name = "bpf_main",
+	generate_ptx(bool main_with_arguments = true,
+		     const std::string &func_name = "bpf_main",
 		     const char *target_cpu = "sm_60");
 };
 

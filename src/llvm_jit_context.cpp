@@ -551,7 +551,8 @@ createNVPTXTargetMachine(const char *target_cpu)
 		triple.str(), target_cpu, "", options, llvm::Reloc::Static));
 }
 std::optional<std::string>
-llvm_bpf_jit_context::generate_ptx(const std::string &func_name,
+llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
+				   const std::string &func_name,
 				   const char *target_cpu)
 {
 	spin_lock_guard guard(compiling.get());
@@ -580,8 +581,9 @@ llvm_bpf_jit_context::generate_ptx(const std::string &func_name,
 	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
 	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
 
-	auto bpfModuleOrErr = generateModule(extFuncNames, definedLddwHelpers,
-					     true, func_name, true);
+	auto bpfModuleOrErr =
+		generateModule(extFuncNames, definedLddwHelpers, true,
+			       main_with_arguments, func_name, true);
 	if (!bpfModuleOrErr) {
 		exitOnErr(bpfModuleOrErr.takeError());
 		return {};

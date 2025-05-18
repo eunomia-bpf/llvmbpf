@@ -146,7 +146,7 @@ add_executable(ptx_test ptx_test.cpp)
 target_link_directories(ptx_test PRIVATE /usr/local/cuda-12.6/lib64 /usr/local/cuda-12.6/lib64/stubs)
 target_link_libraries(ptx_test PRIVATE ${LLVM_LIBS} llvmbpf_vm cuda cudart libnvptxcompiler_static.a spdlog::spdlog)
 add_dependencies(ptx_test llvmbpf_vm spdlog::spdlog)
-target_include_directories(ptx_test PRIVATE ${LLVM_INCLUDE_DIRS} include src /usr/local/cuda-12.6/include)
+target_include_directories(ptx_test PRIVATE ${LLVM_INCLUDE_DIRS} include src /usr/local/cuda-12.6/include ${SPDLOG_INCLUDES})
 
 # target_compile_options(ptx_test PRIVATE -fsanitize=address)
 # target_link_options(ptx_test PRIVATE -lasan)

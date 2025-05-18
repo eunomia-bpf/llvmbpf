@@ -88,10 +88,8 @@ const size_t MAX_LOCAL_FUNC_DEPTH = 32;
 Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	const std::vector<std::string> &extFuncNames,
 	const std::vector<std::string> &lddwHelpers,
-	bool patch_map_val_at_compile_time,
-	bool main_func_with_arguments,
-	const std::string &func_name,
-	bool is_cuda)
+	bool patch_map_val_at_compile_time, bool main_func_with_arguments,
+	const std::string &func_name, bool is_cuda)
 {
 	SPDLOG_DEBUG("Generating module: patch_map_val_at_compile_time={}",
 		     patch_map_val_at_compile_time);
@@ -166,28 +164,24 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			blockBegin[i + curr.offset + 1] = true;
 		}
 	}
-	FunctionType* func_ty;
-	if(main_func_with_arguments) {
-		func_ty = FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
-					    Type::getInt64Ty(*context),
-				  { llvm::PointerType::getUnqual(
-					    llvm::Type::getInt8Ty(*context)),
-				    Type::getInt64Ty(*context) },
-				  false);
+	FunctionType *func_ty;
+	if (main_func_with_arguments) {
+		func_ty = FunctionType::get(
+			is_cuda ? Type::getVoidTy(*context) :
+				  Type::getInt64Ty(*context),
+			{ llvm::PointerType::getUnqual(
+				  llvm::Type::getInt8Ty(*context)),
+			  Type::getInt64Ty(*context) },
+			false);
 	} else {
-		func_ty = FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
-					    Type::getInt64Ty(*context),
-				  {  },
-				  false);
+		func_ty =
+			FunctionType::get(is_cuda ? Type::getVoidTy(*context) :
+						    Type::getInt64Ty(*context),
+					  {}, false);
 	}
 	// The main function
 	Function *bpf_func = Function::Create(
-		func_ty,
-		Function::ExternalLinkage, func_name, jitModule.get());
-
-	// Get args of uint64_t bpf_main(uint64_t, uint64_t)
-	llvm::Argument *mem = bpf_func->getArg(0);
-	llvm::Argument *mem_len = bpf_func->getArg(1);
+		func_ty, Function::ExternalLinkage, func_name, jitModule.get());
 
 	std::vector<Value *> regs;
 	std::vector<BasicBlock *> allBlocks;
@@ -217,10 +211,16 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			"stackEnd");
 		// Write stack pointer into r10
 		builder.CreateStore(stackEnd, regs[10]);
-		// Write memory address into r1
-		builder.CreateStore(mem, regs[1]);
-		// Write memory len into r1
-		builder.CreateStore(mem_len, regs[2]);
+		if (main_func_with_arguments) {
+			// Get args of uint64_t bpf_main(uint64_t, uint64_t)
+			llvm::Argument *mem = bpf_func->getArg(0);
+			llvm::Argument *mem_len = bpf_func->getArg(1);
+
+			// Write memory address into r1
+			builder.CreateStore(mem, regs[1]);
+			// Write memory len into r1
+			builder.CreateStore(mem_len, regs[2]);
+		}
 
 		callStack = builder.CreateAlloca(
 			builder.getPtrTy(),

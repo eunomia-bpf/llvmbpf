@@ -385,7 +385,7 @@ int main()
 
 	vm.load_code((void *)test_prog, sizeof(test_prog));
 	llvm_bpf_jit_context ctx(vm);
-	auto result = *ctx.generate_ptx("sm_60");
+	auto result = *ctx.generate_ptx(false, "bpf_main", "sm_60");
 	{
 		std::ofstream ofs_result("out.ptx");
 		ofs_result << result;

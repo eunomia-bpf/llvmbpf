@@ -13,13 +13,14 @@
 #include <thread>
 #include <vector>
 
-// clang++-17 -S ./test.cu -Wall --cuda-gpu-arch=sm_60 -O2 -L/usr/local/cuda/lib64/ -lcudart
+/* clang++-17 -S ./test.cu -Wall --cuda-gpu-arch=sm_60 -O2 -L/usr/local/cuda/lib64/ -lcudart */
 enum class HelperOperation {
 	MAP_LOOKUP = 1,
 	MAP_UPDATE = 2,
 	MAP_DELETE = 3,
 	MAP_GET_NEXT_KEY = 4,
 	TRACE_PRINTK = 6,
+	GET_CURRENT_PID_TGID = 14,
 	PUTS = 501
 };
 
@@ -44,6 +45,8 @@ union HelperCallRequest {
 	struct {
 		char data[10000];
 	} puts;
+	struct {
+	} get_tid_pgid;
 };
 
 union HelperCallResponse {
@@ -53,6 +56,9 @@ union HelperCallResponse {
 	struct {
 		const void *value;
 	} map_lookup;
+	struct {
+		uint64_t result;
+	} get_tid_pgid;
 };
 /**
  * 我们在这块结构体里放两个标志位和一个简单的参数字段
@@ -108,7 +114,7 @@ extern "C" __device__ HelperCallResponse make_helper_call(long map_id,
 	CommSharedMem *g_data = (CommSharedMem *)constData;
 	// printf("make_map_call at %d, constdata=%lx\n",
 	//        threadIdx.x + blockIdx.x * blockDim.x, (uintptr_t)g_data);
-	auto start_time = read_globaltimer();
+	// auto start_time = read_globaltimer();
 	spin_lock(&g_data->occupy_flag);
 	// 准备要写入的参数值
 	int val = 42; // 这里就写一个固定值，示例用
@@ -139,11 +145,11 @@ extern "C" __device__ HelperCallResponse make_helper_call(long map_id,
 	HelperCallResponse resp = g_data->resp;
 
 	spin_unlock(&g_data->occupy_flag);
-	auto end_time = read_globaltimer();
-	if (req_id < 8) {
-		atomicAdd((unsigned long long *)&g_data->time_sum[req_id],
-			  end_time - start_time);
-	}
+	// auto end_time = read_globaltimer();
+	// if (req_id < 8) {
+	// 	atomicAdd((unsigned long long *)&g_data->time_sum[req_id],
+	// 		  end_time - start_time);
+	// }
 	return resp;
 }
 
@@ -227,6 +233,14 @@ _bpf_helper_ext_0006(uint64_t fmt, uint64_t fmt_size, uint64_t arg1,
 }
 
 extern "C" __noinline__ __device__ uint64_t
+_bpf_helper_ext_0014(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
+{
+	HelperCallResponse resp =
+		make_helper_call(0, (int)HelperOperation::GET_CURRENT_PID_TGID);
+	return resp.get_tid_pgid.result;
+}
+
+extern "C" __noinline__ __device__ uint64_t
 _bpf_helper_ext_0501(uint64_t data, uint64_t, uint64_t, uint64_t, uint64_t)
 {
 	CommSharedMem *global_data = (CommSharedMem *)constData;
@@ -242,6 +256,12 @@ _bpf_helper_ext_0501(uint64_t data, uint64_t, uint64_t, uint64_t, uint64_t)
 	HelperCallResponse resp =
 		make_helper_call(0, (int)HelperOperation::PUTS);
 	return resp.puts.result;
+}
+
+extern "C" __noinline__ __device__ uint64_t
+_bpf_helper_ext_0502(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
+{
+	return read_globaltimer();
 }
 
 // extern "C" __noinline__ __device__ void _request_probe()

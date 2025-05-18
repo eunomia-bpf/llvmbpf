@@ -166,7 +166,7 @@ extern "C" __noinline__ __device__ uint64_t _bpf_helper_ext_0001(
 	CommSharedMem *global_data = (CommSharedMem *)constData;
 	auto &req = global_data->req;
 	// CallRequest req;
-	const auto &map_info = ::map_info[map >> 32];
+	const auto &map_info = ::map_info[map];
 	// printf("helper1 map %ld keysize=%d valuesize=%d\n", map,
 	//        map_info.key_size, map_info.value_size);
 	simple_memcpy(&req.map_lookup.key, (void *)(uintptr_t)key,
@@ -183,7 +183,7 @@ extern "C" __noinline__ __device__ uint64_t _bpf_helper_ext_0002(
 {
 	CommSharedMem *global_data = (CommSharedMem *)constData;
 	auto &req = global_data->req;
-	const auto &map_info = ::map_info[map >> 32];
+	const auto &map_info = ::map_info[map];
 	// printf("helper2 map %ld keysize=%d
 	// valuesize=%d\n",map,map_info.key_size,map_info.value_size);
 	simple_memcpy(&req.map_update.key, (void *)(uintptr_t)key,
@@ -202,7 +202,7 @@ extern "C" __noinline__ __device__ uint64_t _bpf_helper_ext_0003(
 {
 	CommSharedMem *global_data = (CommSharedMem *)constData;
 	auto &req = global_data->req;
-	const auto &map_info = ::map_info[map >> 32];
+	const auto &map_info = ::map_info[map];
 	// printf("helper3 map %ld keysize=%d
 	// valuesize=%d\n",map,map_info.key_size,map_info.value_size);
 	simple_memcpy(&req.map_delete.key, (void *)(uintptr_t)key,

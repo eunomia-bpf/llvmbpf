@@ -1,3 +1,4 @@
+#include <__clang_cuda_builtin_vars.h>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -264,28 +265,36 @@ _bpf_helper_ext_0502(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
 	return read_globaltimer();
 }
 
-// extern "C" __noinline__ __device__ void _request_probe()
-// {
-// 	make_helper_call(0, 1000);
-// }
+extern "C" __noinline__ __device__ uint64_t
+_bpf_helper_ext_0503(uint64_t x, uint64_t y, uint64_t z, uint64_t, uint64_t)
+{
+	// get block idx
+	*(uint64_t *)(uintptr_t)x = blockIdx.x;
+	*(uint64_t *)(uintptr_t)y = blockIdx.y;
+	*(uint64_t *)(uintptr_t)z = blockIdx.z;
 
-// extern "C" __noinline__ __device__ uint32_t vprintf_mocked(uint64_t,
-// uint64_t)
-// {
-// 	_request_probe();
-// 	return 0;
-// }
+	return 0;
+}
+extern "C" __noinline__ __device__ uint64_t
+_bpf_helper_ext_0504(uint64_t x, uint64_t y, uint64_t z, uint64_t, uint64_t)
+{
+	// get block dim
+	*(uint64_t *)(uintptr_t)x = blockDim.x;
+	*(uint64_t *)(uintptr_t)y = blockDim.y;
+	*(uint64_t *)(uintptr_t)z = blockDim.z;
 
-// extern "C" __global__ void probe_demo(int32_t *array, int32_t length,
-// 				      int64_t *out)
-// {
-// 	int64_t result = 0;
-// 	for (int i = 0; i < length; i++) {
-// 		result += array[i];
-// 		printf("Adding %d\n", array[i]);
-// 	}
-// 	*out = result;
-// }
+	return 0;
+}
+extern "C" __noinline__ __device__ uint64_t
+_bpf_helper_ext_0505(uint64_t x, uint64_t y, uint64_t z, uint64_t, uint64_t)
+{
+	// get threadIdx
+	*(uint64_t *)(uintptr_t)x = threadIdx.x;
+	*(uint64_t *)(uintptr_t)y = threadIdx.y;
+	*(uint64_t *)(uintptr_t)z = threadIdx.z;
+
+	return 0;
+}
 
 extern "C" __global__ void bpf_main(void *mem, size_t sz)
 {

@@ -656,13 +656,103 @@ $L__BB8_4:                              // =>This Inner Loop Header: Depth=1
 	ret;
                                         // -- End function
 }
+	// .globl	_bpf_helper_ext_0503    // -- Begin function _bpf_helper_ext_0503
+.visible .func  (.param .b64 func_retval0) _bpf_helper_ext_0503(
+	.param .b64 _bpf_helper_ext_0503_param_0,
+	.param .b64 _bpf_helper_ext_0503_param_1,
+	.param .b64 _bpf_helper_ext_0503_param_2,
+	.param .b64 _bpf_helper_ext_0503_param_3,
+	.param .b64 _bpf_helper_ext_0503_param_4
+)                                       // @_bpf_helper_ext_0503
+{
+	.reg .b32 	%r<4>;
+	.reg .b64 	%rd<8>;
+
+// %bb.0:
+	ld.param.u64 	%rd1, [_bpf_helper_ext_0503_param_0];
+	ld.param.u64 	%rd2, [_bpf_helper_ext_0503_param_1];
+	mov.u32 	%r1, %ctaid.x;
+	cvt.u64.u32 	%rd3, %r1;
+	ld.param.u64 	%rd4, [_bpf_helper_ext_0503_param_2];
+	st.u64 	[%rd1], %rd3;
+	mov.u32 	%r2, %ctaid.y;
+	cvt.u64.u32 	%rd5, %r2;
+	st.u64 	[%rd2], %rd5;
+	mov.u32 	%r3, %ctaid.z;
+	cvt.u64.u32 	%rd6, %r3;
+	st.u64 	[%rd4], %rd6;
+	mov.u64 	%rd7, 0;
+	st.param.b64 	[func_retval0+0], %rd7;
+	ret;
+                                        // -- End function
+}
+	// .globl	_bpf_helper_ext_0504    // -- Begin function _bpf_helper_ext_0504
+.visible .func  (.param .b64 func_retval0) _bpf_helper_ext_0504(
+	.param .b64 _bpf_helper_ext_0504_param_0,
+	.param .b64 _bpf_helper_ext_0504_param_1,
+	.param .b64 _bpf_helper_ext_0504_param_2,
+	.param .b64 _bpf_helper_ext_0504_param_3,
+	.param .b64 _bpf_helper_ext_0504_param_4
+)                                       // @_bpf_helper_ext_0504
+{
+	.reg .b32 	%r<4>;
+	.reg .b64 	%rd<8>;
+
+// %bb.0:
+	ld.param.u64 	%rd1, [_bpf_helper_ext_0504_param_0];
+	ld.param.u64 	%rd2, [_bpf_helper_ext_0504_param_1];
+	mov.u32 	%r1, %ntid.x;
+	cvt.u64.u32 	%rd3, %r1;
+	ld.param.u64 	%rd4, [_bpf_helper_ext_0504_param_2];
+	st.u64 	[%rd1], %rd3;
+	mov.u32 	%r2, %ntid.y;
+	cvt.u64.u32 	%rd5, %r2;
+	st.u64 	[%rd2], %rd5;
+	mov.u32 	%r3, %ntid.z;
+	cvt.u64.u32 	%rd6, %r3;
+	st.u64 	[%rd4], %rd6;
+	mov.u64 	%rd7, 0;
+	st.param.b64 	[func_retval0+0], %rd7;
+	ret;
+                                        // -- End function
+}
+	// .globl	_bpf_helper_ext_0505    // -- Begin function _bpf_helper_ext_0505
+.visible .func  (.param .b64 func_retval0) _bpf_helper_ext_0505(
+	.param .b64 _bpf_helper_ext_0505_param_0,
+	.param .b64 _bpf_helper_ext_0505_param_1,
+	.param .b64 _bpf_helper_ext_0505_param_2,
+	.param .b64 _bpf_helper_ext_0505_param_3,
+	.param .b64 _bpf_helper_ext_0505_param_4
+)                                       // @_bpf_helper_ext_0505
+{
+	.reg .b32 	%r<4>;
+	.reg .b64 	%rd<8>;
+
+// %bb.0:
+	ld.param.u64 	%rd1, [_bpf_helper_ext_0505_param_0];
+	ld.param.u64 	%rd2, [_bpf_helper_ext_0505_param_1];
+	mov.u32 	%r1, %tid.x;
+	cvt.u64.u32 	%rd3, %r1;
+	ld.param.u64 	%rd4, [_bpf_helper_ext_0505_param_2];
+	st.u64 	[%rd1], %rd3;
+	mov.u32 	%r2, %tid.y;
+	cvt.u64.u32 	%rd5, %r2;
+	st.u64 	[%rd2], %rd5;
+	mov.u32 	%r3, %tid.z;
+	cvt.u64.u32 	%rd6, %r3;
+	st.u64 	[%rd4], %rd6;
+	mov.u64 	%rd7, 0;
+	st.param.b64 	[func_retval0+0], %rd7;
+	ret;
+                                        // -- End function
+}
 	// .globl	bpf_main                // -- Begin function bpf_main
 .visible .entry bpf_main(
 	.param .u64 bpf_main_param_0,
 	.param .u64 bpf_main_param_1
 )                                       // @bpf_main
 {
-	.local .align 8 .b8 	__local_depot10[80];
+	.local .align 8 .b8 	__local_depot13[80];
 	.reg .b64 	%SP;
 	.reg .b64 	%SPL;
 	.reg .b16 	%rs<47>;
@@ -670,7 +760,7 @@ $L__BB8_4:                              // =>This Inner Loop Header: Depth=1
 	.reg .b64 	%rd<193>;
 
 // %bb.0:
-	mov.u64 	%SPL, __local_depot10;
+	mov.u64 	%SPL, __local_depot13;
 	cvta.local.u64 	%SP, %SPL;
 	ld.param.u64 	%rd1, [bpf_main_param_0];
 	cvta.to.global.u64 	%rd2, %rd1;

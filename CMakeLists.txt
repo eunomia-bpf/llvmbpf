@@ -57,18 +57,6 @@ endif()
 option(ENABLE_LLVM_SHARED "Link shared library of LLVM" NO)
 option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 
-# if(ENABLE_LLVM_SHARED)
-#     set(LLVM_LIBS LLVM)
-# else()
-#     llvm_map_components_to_libnames(LLVM_LIBS
-#         Core
-#         OrcJIT
-#         mcjit
-#         Support
-#         nativecodegen
-#     )
-# endif()
-
 llvm_map_components_to_libnames(LLVM_LIBS
     Core
     OrcJIT
@@ -82,7 +70,7 @@ list(APPEND LLVM_LIBS LLVM)
 include(FetchContent)
 
 if(NOT DEFINED SPDLOG_INCLUDE)
-    message(INFO " Adding spdlog seperately..")
+    message(STATUS " Adding spdlog seperately..")
 
     # spdlog
     # Fetch spdlog
@@ -142,11 +130,9 @@ endif()
 
 add_subdirectory(example)
 
-add_executable(ptx_test ptx_test.cpp)
-target_link_directories(ptx_test PRIVATE /usr/local/cuda-12.6/lib64 /usr/local/cuda-12.6/lib64/stubs)
-target_link_libraries(ptx_test PRIVATE ${LLVM_LIBS} llvmbpf_vm cuda cudart libnvptxcompiler_static.a spdlog::spdlog)
-add_dependencies(ptx_test llvmbpf_vm spdlog::spdlog)
-target_include_directories(ptx_test PRIVATE ${LLVM_INCLUDE_DIRS} include src /usr/local/cuda-12.6/include ${SPDLOG_INCLUDES})
 
-# target_compile_options(ptx_test PRIVATE -fsanitize=address)
-# target_link_options(ptx_test PRIVATE -lasan)
+option(LLVMBPF_ENABLE_DEMO "Whether build the demo program, which requires CUDA" OFF)
+
+if(${LLVMBPF_ENABLE_DEMO})
+    add_subdirectory(demo)
+endif()

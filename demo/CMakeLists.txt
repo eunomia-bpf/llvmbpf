@@ -1,0 +1,11 @@
+add_executable(ptx_test ptx_test.cpp)
+
+option(LLVMBPF_CUDA_PATH "Path where CUDA installs")
+message(STATUS "LLVMBPF_CUDA_PATH=${LLVMBPF_CUDA_PATH}")
+if(NOT LLVMBPF_CUDA_PATH AND NOT ${LLVMBPF_CUDA_PATH})
+    message(FATAL_ERROR "Please set LLVMBPF_CUDA_PATH if you want to build ptx_test, otherwise set LLVMBPF_ENABLE_DEMO to NO")
+endif()
+target_link_directories(ptx_test PRIVATE ${LLVMBPF_CUDA_PATH}/lib64 ${LLVMBPF_CUDA_PATH}/lib64/stubs)
+target_link_libraries(ptx_test PRIVATE ${LLVM_LIBS} llvmbpf_vm cuda libnvptxcompiler_static.a spdlog::spdlog)
+add_dependencies(ptx_test llvmbpf_vm spdlog::spdlog)
+target_include_directories(ptx_test PRIVATE ${LLVM_INCLUDE_DIRS} include src ${LLVMBPF_CUDA_PATH}/include ${SPDLOG_INCLUDES})

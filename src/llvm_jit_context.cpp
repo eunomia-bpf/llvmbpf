@@ -622,13 +622,13 @@ llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
 
 namespace bpftime
 {
-std::string get_trampoline_ptx()
+std::string get_defaul_trampoline_ptx()
 {
 	return TRAMPOLINE_PTX;
 }
 std::string wrap_ptx_with_trampoline(std::string input)
 {
-	return get_trampoline_ptx() + input;
+	return get_defaul_trampoline_ptx() + input;
 }
 std::string patch_helper_names_and_header(std::string result)
 {

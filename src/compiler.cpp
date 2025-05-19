@@ -9,7 +9,7 @@
 #include "spdlog/spdlog.h"
 #include <cassert>
 #include <cstdint>
-#include <llvm-20/llvm/IR/DerivedTypes.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/Support/Alignment.h>
 #include <llvm/Support/AtomicOrdering.h>
 #include <llvm/Support/Error.h>

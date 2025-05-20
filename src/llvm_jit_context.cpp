@@ -32,7 +32,6 @@
 #else
 #include <llvm/Support/Host.h>
 #endif
-#include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>

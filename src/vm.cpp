@@ -1,7 +1,6 @@
 #include "spdlog/spdlog.h"
 #include <cerrno>
 #include <cstdint>
-#include <llvm/Support/ManagedStatic.h>
 #include <memory>
 #include <ebpf_inst.h>
 #include "llvm_jit_context.hpp"
@@ -16,7 +15,6 @@ llvmbpf_vm::llvmbpf_vm()
 
 llvmbpf_vm::~llvmbpf_vm()
 {
-	llvm::llvm_shutdown();
 }
 
 std::string llvmbpf_vm::get_error_message() noexcept

@@ -160,6 +160,6 @@ add_subdirectory(example)
 
 option(LLVMBPF_ENABLE_DEMO "Whether build the demo program, which requires CUDA" OFF)
 
-if(${LLVMBPF_ENABLE_DEMO})
+if(LLVMBPF_ENABLE_DEMO)
     add_subdirectory(demo)
 endif()

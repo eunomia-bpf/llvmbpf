@@ -236,7 +236,7 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	int zero = 0;
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
-		SPDLOG_INFO("Initializing llvm");
+		SPDLOG_DEBUG("Initializing llvm");
 		llvm::InitializeNativeTarget();
 		llvm::InitializeNativeTarget();
 		llvm::InitializeNativeTargetAsmPrinter();

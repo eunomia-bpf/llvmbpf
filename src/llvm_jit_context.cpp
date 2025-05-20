@@ -552,7 +552,7 @@ createNVPTXTargetMachine(const char *target_cpu)
 	auto result = std::unique_ptr<llvm::TargetMachine>(
 		target->createTargetMachine(triple.str(), target_cpu, "",
 					    options, llvm::Reloc::Static));
-	return std::move(result);
+	return result;
 }
 std::optional<std::string>
 llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,

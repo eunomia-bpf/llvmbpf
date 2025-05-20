@@ -57,7 +57,7 @@ endif()
 option(ENABLE_LLVM_SHARED "Link shared library of LLVM" NO)
 option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 
-if(${ENABLE_LLVM_SHARED})
+if(ENABLE_LLVM_SHARED)
     list(PREPEND LLVM_LIBS LLVM)
 else()
     llvm_map_components_to_libnames(LLVM_LIBS

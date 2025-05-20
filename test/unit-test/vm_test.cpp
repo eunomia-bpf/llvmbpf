@@ -300,7 +300,7 @@ TEST_CASE("Test compile with no LDDW helper")
 	auto func = vm.compile();
 	REQUIRE(!func.has_value()); // Compilation should fail due to missing
 	REQUIRE(vm.get_error_message() ==
-		"map_val is not provided, unable to compile at pc 15");
+		"map_val is not provided, unable to compile at pc 14");
 }
 
 

@@ -92,25 +92,6 @@ else()
         AArch64Desc
         AArch64Info
         AArch64AsmParser
-        X86
-        NVPTX
-        AArch64
-        AMDGPU
-        ARM
-        AVR
-        BPF
-        Hexagon
-        Lanai
-        Mips
-        MSP430
-        PowerPC
-        RISCV
-        Sparc
-        SystemZ
-        VE
-        WebAssembly
-        XCore
-        M68k
     )
 endif()
 include(FetchContent)

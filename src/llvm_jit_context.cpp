@@ -236,11 +236,15 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	int zero = 0;
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
-		SPDLOG_DEBUG("Initializing llvm");
-		llvm::InitializeAllTargets();
-		llvm::InitializeAllTargetMCs();
-		llvm::InitializeAllAsmParsers();
-		llvm::InitializeAllAsmPrinters();
+		SPDLOG_INFO("Initializing llvm");
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+		llvm::InitializeNativeTargetAsmParser();
+
+		LLVMInitializeNVPTXTarget();
+		LLVMInitializeNVPTXTargetMC();
+		
 	}
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);

@@ -57,41 +57,62 @@ endif()
 option(ENABLE_LLVM_SHARED "Link shared library of LLVM" NO)
 option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 
-llvm_map_components_to_libnames(LLVM_LIBS
-    Core
-    Support
-    Target
-    Analysis
-    ipo
-    TransformUtils
-    BitReader
-    AsmParser
-    Linker
-    MC
-    MCParser
-    MCDisassembler
-    Object
-    ExecutionEngine
-    RuntimeDyld
-    OrcJIT
-    MCJIT
-    # X86
-    X86CodeGen
-    X86Desc
-    X86Info
-    X86AsmParser
-    # NVPTX
-    NVPTXCodeGen
-    NVPTXDesc
-    NVPTXInfo
-    # AArch64
-    AArch64CodeGen
-    AArch64Desc
-    AArch64Info
-    AArch64AsmParser
-)
-list(PREPEND LLVM_LIBS LLVM)
-
+if(${ENABLE_LLVM_SHARED})
+    list(PREPEND LLVM_LIBS LLVM)
+else()
+    llvm_map_components_to_libnames(LLVM_LIBS
+        Core
+        Support
+        Target
+        Analysis
+        ipo
+        TransformUtils
+        BitReader
+        AsmParser
+        Linker
+        MC
+        MCParser
+        MCDisassembler
+        Object
+        ExecutionEngine
+        RuntimeDyld
+        OrcJIT
+        MCJIT
+        # X86
+        X86CodeGen
+        X86Desc
+        X86Info
+        X86AsmParser
+        # NVPTX
+        NVPTXCodeGen
+        NVPTXDesc
+        NVPTXInfo
+        # AArch64
+        AArch64CodeGen
+        AArch64Desc
+        AArch64Info
+        AArch64AsmParser
+        X86
+        NVPTX
+        AArch64
+        AMDGPU
+        ARM
+        AVR
+        BPF
+        Hexagon
+        Lanai
+        Mips
+        MSP430
+        PowerPC
+        RISCV
+        Sparc
+        SystemZ
+        VE
+        WebAssembly
+        XCore
+        M68k
+    )
+endif()
 include(FetchContent)
 
 if(NOT DEFINED SPDLOG_INCLUDE)

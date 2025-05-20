@@ -1,6 +1,7 @@
 #include "spdlog/spdlog.h"
 #include <cerrno>
 #include <cstdint>
+#include <llvm/Support/ManagedStatic.h>
 #include <memory>
 #include <ebpf_inst.h>
 #include "llvm_jit_context.hpp"
@@ -11,13 +12,12 @@ llvmbpf_vm::llvmbpf_vm()
 	: ext_funcs(MAX_EXT_FUNCS),
 	  jit_ctx(std::make_unique<bpftime::llvm_bpf_jit_context>(*this))
 {
-	llvm::InitializeAllTargets();
-	llvm::InitializeAllTargetMCs();
-	llvm::InitializeAllAsmParsers();
-	llvm::InitializeAllAsmPrinters();
 }
 
-llvmbpf_vm::~llvmbpf_vm() = default;
+llvmbpf_vm::~llvmbpf_vm()
+{
+	llvm::llvm_shutdown();
+}
 
 std::string llvmbpf_vm::get_error_message() noexcept
 {
@@ -123,7 +123,7 @@ void llvmbpf_vm::set_lddw_helpers(uint64_t (*map_by_fd)(uint32_t),
 	this->code_addr = code_addr;
 }
 
-std::optional<std::vector<uint8_t> >
+std::optional<std::vector<uint8_t>>
 llvmbpf_vm::do_aot_compile(bool print_ir) noexcept
 {
 	try {

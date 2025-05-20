@@ -59,13 +59,39 @@ option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 
 llvm_map_components_to_libnames(LLVM_LIBS
     Core
-    OrcJIT
-    mcjit
     Support
-    nativecodegen
-    NVPTX
+    Target
+    Analysis
+    ipo
+    TransformUtils
+    TargetParser
+    BitReader
+    AsmParser
+    Linker
+    MC
+    MCParser
+    MCDisassembler
+    Object
+    ExecutionEngine
+    RuntimeDyld
+    OrcJIT
+    MCJIT
+    # X86
+    X86CodeGen
+    X86Desc
+    X86Info
+    X86AsmParser
+    # NVPTX
+    NVPTXCodeGen
+    NVPTXDesc
+    NVPTXInfo
+    # AArch64
+    AArch64CodeGen
+    AArch64Desc
+    AArch64Info
+    AArch64AsmParser
 )
-list(APPEND LLVM_LIBS LLVM)
+list(PREPEND LLVM_LIBS LLVM)
 
 include(FetchContent)
 

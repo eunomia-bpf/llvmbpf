@@ -238,8 +238,10 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
 		SPDLOG_DEBUG("Initializing llvm");
-		InitializeNativeTarget();
-		InitializeNativeTargetAsmPrinter();
+		llvm::InitializeAllTargets();
+		llvm::InitializeAllTargetMCs();
+		llvm::InitializeAllAsmParsers();
+		llvm::InitializeAllAsmPrinters();
 	}
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);
@@ -418,11 +420,11 @@ llvm_bpf_jit_context::load_aot_object(const std::vector<uint8_t> &buf)
 	this->get_entry_address();
 	return llvm::Error::success();
 }
-static ExitOnError exitOnErr;
 std::tuple<std::unique_ptr<llvm::orc::LLJIT>, std::vector<std::string>,
 	   std::vector<std::string>>
 llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 {
+	static ExitOnError exitOnErr;
 	// Create a JIT builder
 	SPDLOG_DEBUG("LLVM-JIT: Creating LLJIT instance");
 	auto jit_err = LLJITBuilder().create();
@@ -464,8 +466,6 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 		jit->getExecutionSession().intern("__aeabi_unwind_cpp_pr1"),
 		JITEvaluatedSymbol::fromPointer(__aeabi_unwind_cpp_pr1));
 #endif
-	auto define_extSymbols_err =
-		mainDylib.define(absoluteSymbols(extSymbols));
 	if (auto err = mainDylib.define(absoluteSymbols(extSymbols)); !err) {
 		SPDLOG_DEBUG("LLVM-JIT: failed to define external symbols");
 	}
@@ -546,15 +546,17 @@ createNVPTXTargetMachine(const char *target_cpu)
 
 	llvm::TargetOptions options;
 	options.FloatABIType = llvm::FloatABI::Default;
-
-	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
-		triple.str(), target_cpu, "", options, llvm::Reloc::Static));
+	auto result = std::unique_ptr<llvm::TargetMachine>(
+		target->createTargetMachine(triple.str(), target_cpu, "",
+					    options, llvm::Reloc::Static));
+	return std::move(result);
 }
 std::optional<std::string>
 llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
 				   const std::string &func_name,
 				   const char *target_cpu)
 {
+	static ExitOnError exitOnErr;
 	spin_lock_guard guard(compiling.get());
 	auto targetMachine = createNVPTXTargetMachine(target_cpu);
 	std::vector<std::string> extFuncNames;

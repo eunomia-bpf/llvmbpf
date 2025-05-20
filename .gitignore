@@ -21,3 +21,4 @@ example/load-llvm-ir/bpf_module.o
 dump*.txt
 /a.out
 /out.ptx
+/test.*

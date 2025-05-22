@@ -390,6 +390,12 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_PTX=1 -DLLVMBPF_CUDA_
 cmake --build build --target all -j
 ```
 
+Run the PTX example:
+
+```sh
+build/example/ptx/ptx_test
+```
+
 ## optimizaion
 
 Based on the AOT compiler, we can apply some optimization strategies:

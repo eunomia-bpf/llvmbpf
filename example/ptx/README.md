@@ -1,4 +1,4 @@
-# Demo program
+# ptx program
 
 This is a simple demo program which shows how to call llvmbpf to generate PTX, and uses CUDA driver API to execute the compiled PTX. 
 

@@ -61,6 +61,7 @@ if(ENABLE_LLVM_SHARED)
     list(PREPEND LLVM_LIBS LLVM)
 else()
     llvm_map_components_to_libnames(LLVM_LIBS
+      ${LLVM_TARGETS_TO_BUILD}
         Core
         Support
         Target
@@ -158,8 +159,8 @@ endif()
 add_subdirectory(example)
 
 
-option(LLVMBPF_ENABLE_DEMO "Whether build the demo program, which requires CUDA" OFF)
+option(LLVMBPF_ENABLE_PTX "Whether build the ptx demo program, which requires CUDA" OFF)
 
-if(LLVMBPF_ENABLE_DEMO)
-    add_subdirectory(demo)
+if(LLVMBPF_ENABLE_PTX)
+    add_subdirectory(example/ptx)
 endif()

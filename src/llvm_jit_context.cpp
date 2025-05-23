@@ -602,7 +602,7 @@ llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
 		optimizeModule(M);
 
 		llvm::legacy::PassManager passManager;
-#if LLVM_VERSION_MAJOR > 16
+#if LLVM_VERSION_MAJOR > 17
 		CodeGenFileType fileType = CodeGenFileType::AssemblyFile;
 #else
 		CodeGenFileType fileType = llvm::CGFT_AssemblyFile;

@@ -67,15 +67,7 @@ class llvm_bpf_jit_context {
 		     const std::string &func_name = "bpf_main",
 		     const char *target_cpu = "sm_60");
 };
-/**
- * @brief Get the default trampoline ptx object, used for helper operations, which is generated from `test.cu` 
- * 
- * @return std::string 
- */
-std::string get_default_trampoline_ptx();
-std::string patch_helper_names_and_header(std::string ptx_to_wrap);
-std::string patch_main_from_func_to_entry(std::string);
-std::string wrap_ptx_with_trampoline(std::string input);
+
 } // namespace bpftime
 
 #endif

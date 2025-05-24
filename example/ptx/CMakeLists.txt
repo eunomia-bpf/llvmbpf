@@ -2,7 +2,7 @@ add_executable(ptx_test ptx_test.cpp)
 
 option(LLVMBPF_CUDA_PATH "Path where CUDA installs")
 message(STATUS "LLVMBPF_CUDA_PATH=${LLVMBPF_CUDA_PATH}")
-if(NOT LLVMBPF_CUDA_PATH AND NOT ${LLVMBPF_CUDA_PATH})
+if(NOT LLVMBPF_CUDA_PATH)
     message(FATAL_ERROR "Please set LLVMBPF_CUDA_PATH if you want to build ptx_test, otherwise set LLVMBPF_ENABLE_PTX to NO")
 endif()
 set(LLVM_LINK_COMPONENTS 

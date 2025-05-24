@@ -12,7 +12,7 @@ This component is part of the [bpftime](https://github.com/eunomia-bpf/bpftime) 
 - Compiles eBPF ELF files into AOTed native code ELF object files, which can be linked like C-compiled objects or loaded into llvmbpf.
 - Loads and executes AOT-compiled ELF object files within the eBPF runtime.
 - Supports eBPF helpers and maps lddw functions.
-- Supports PTX generation for CUDA and run eBPF program on GPU.
+- Supports PTX generation and run eBPF program on GPU.
 
 This library is optimized for performance, flexibility, and minimal dependencies. It does not include maps implement, helpers, verifiers, or loaders for eBPF applications, making it suitable as a lightweight, high-performance library.
 
@@ -26,6 +26,7 @@ For a comprehensive userspace eBPF runtime that includes support for maps, helpe
     - [load eBPF bytecode from ELF file](#load-ebpf-bytecode-from-elf-file)
     - [Maps and data relocation support](#maps-and-data-relocation-support)
     - [Build into standalone binary for deployment](#build-into-standalone-binary-for-deployment)
+    - [PTX generation for CUDA on GPU](#ptx-generation-for-cuda-on-gpu)
   - [optimizaion](#optimizaion)
     - [inline the maps and helper function](#inline-the-maps-and-helper-function)
     - [Use original LLVM IR from C code](#use-original-llvm-ir-from-c-code)
@@ -380,7 +381,7 @@ clang -g main.c xdp-counter.ll -o standalone
 
 And you can run the `standalone` eBPF program directly.
 
-## PTX generation for CUDA
+## PTX generation for CUDA on GPU
 
 llvmbpf can generate PTX code for CUDA and run eBPF program on GPU. See [example/ptx](example/ptx) for an example.
 

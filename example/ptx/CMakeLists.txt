@@ -1,4 +1,5 @@
 add_executable(ptx_test ptx_test.cpp)
+find_package(spdlog REQUIRED)
 
 option(LLVMBPF_CUDA_PATH "Path where CUDA installs")
 message(STATUS "LLVMBPF_CUDA_PATH=${LLVMBPF_CUDA_PATH}")

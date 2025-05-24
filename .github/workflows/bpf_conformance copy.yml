@@ -1,0 +1,97 @@
+name: Test bpf_conformance and publish results
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: 'recursive'
+
+    - name: Install lcov (Ubuntu)
+      run: sudo apt install -y lcov llvm-15-dev libzstd-dev libboost-all-dev
+      
+    - name: build
+      run: 
+           |
+          LLVM_DIR=/usr/lib/llvm-15/cmake cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 
+          cmake --build build --target all -j
+
+    - name: get bpf_conformance for spec version
+      run: |
+        git clone https://github.com/Alan-Jowett/bpf_conformance --recursive
+        cd bpf_conformance
+        git checkout bb9f745ef53eb0568eb1ffc772d9a0e434b17755
+        cmake . -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --target bpf_conformance_runner
+
+    - name: test bpf_conformance
+      run: |
+        ./bpf_conformance/build/bin/bpf_conformance_runner  --cpu_version v4 --exclude_regex "lock_xchg+" --test_file_directory \
+        ./bpf_conformance/tests --plugin_path \
+        build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner 
+
+    - name: upload coverage
+      run: |
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter system-files
+          lcov --list coverage.info # debug info
+        
+    - uses: codecov/codecov-action@v4
+      with:
+            fail_ci_if_error: true # optional (default = false)
+            files: ./coverage.info # optional
+            flags: bpf_conformance
+            token: ${{ secrets.CODECOV_TOKEN }} # required
+            verbose: true # optional (default = false)
+  
+    - name: get bpf_conformance newest
+      run: |
+              cd bpf_conformance
+              git checkout main
+              cmake . -B build -DCMAKE_BUILD_TYPE=Release
+              cmake --build build --target bpf_conformance_runner
+      
+    - name: test bpf_conformance newest
+      run: |
+              ./bpf_conformance/build/bin/bpf_conformance_runner  --test_file_directory \
+              ./bpf_conformance/tests --plugin_path \
+              build/test/bpf_conformance_runner/bpftime_vm_bpf_conformance_runner \
+              > bpf_conformance_results.txt  || echo "ok"
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        # Upload entire repository
+        path: '.'
+  deploy:
+    if: github.event_name == 'push'
+    # Add a dependency to the build job
+    needs: build
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # Specify runner + deployment step
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4 # or specific "vX.X.X" version tag for this action
+
+

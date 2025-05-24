@@ -12,7 +12,7 @@ This component is part of the [bpftime](https://github.com/eunomia-bpf/bpftime) 
 - Compiles eBPF ELF files into AOTed native code ELF object files, which can be linked like C-compiled objects or loaded into llvmbpf.
 - Loads and executes AOT-compiled ELF object files within the eBPF runtime.
 - Supports eBPF helpers and maps lddw functions.
-- Supports PTX generation and run eBPF program on GPU.
+- Supports PTX generation for CUDA on GPU.
 
 This library is optimized for performance, flexibility, and minimal dependencies. It does not include maps implement, helpers, verifiers, or loaders for eBPF applications, making it suitable as a lightweight, high-performance library.
 

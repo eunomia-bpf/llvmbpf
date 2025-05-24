@@ -1,0 +1,40 @@
+name: Build and Test PTX for CUDA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - name: Install CUDA
+      uses: Jimver/cuda-toolkit@v0.2.11
+      with:
+        cuda: '12.6.0'
+        method: 'network'
+        sub-packages: '["nvcc", "cudart", "nvrtc"]'
+
+    - name: Install dependencies
+      run: sudo apt install -y llvm-15-dev libzstd-dev libboost-all-dev
+
+    - name: Configure and build with PTX support
+      run: |
+        LLVM_DIR=/usr/lib/llvm-15/cmake cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_PTX=1 -DLLVMBPF_CUDA_PATH=${CUDA_PATH}
+        cmake --build build --target all -j
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ptx-example
+        path: build/example/ptx/ptx_test

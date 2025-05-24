@@ -32,9 +32,3 @@ jobs:
       run: |
         LLVM_DIR=/usr/lib/llvm-15/cmake cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_PTX=1 -DLLVMBPF_CUDA_PATH=${CUDA_PATH}
         cmake --build build --target all -j
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: ptx-example
-        path: build/example/ptx/ptx_test

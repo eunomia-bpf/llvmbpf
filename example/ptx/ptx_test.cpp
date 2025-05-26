@@ -360,11 +360,14 @@ static std::string load_local_ptx()
 int main()
 {
 	signal(SIGINT, signal_handler);
-	llvm::InitializeAllTargetInfos(); // 初始化 TargetInfo
-	llvm::InitializeAllTargets(); // 初始化 Target (注册 Target 对象)
-	llvm::InitializeAllTargetMCs(); // 初始化 TargetMachine 创建所需内容
-	llvm::InitializeAllAsmPrinters(); // 初始化汇编打印器
-	llvm::InitializeAllAsmParsers(); // 如果需要解析汇编或 .ll 文件
+
+	llvmbpf_vm vm;
+	vm.register_external_function(1, "map_lookup", (void *)test_func);
+	vm.register_external_function(2, "map_update", (void *)test_func);
+	vm.register_external_function(3, "map_delete", (void *)test_func);
+
+	vm.load_code((void *)test_prog, sizeof(test_prog));
+	llvm_bpf_jit_context ctx(vm);
 	for (const auto &target : llvm::TargetRegistry::targets()) {
 		cout << "Registered target: " << target.getName() << endl;
 	}
@@ -378,14 +381,8 @@ int main()
 				"Failed to find NVPTX target: " + error);
 		}
 	}
-	llvmbpf_vm vm;
-	vm.register_external_function(1, "map_lookup", (void *)test_func);
-	vm.register_external_function(2, "map_update", (void *)test_func);
-	vm.register_external_function(3, "map_delete", (void *)test_func);
-
-	vm.load_code((void *)test_prog, sizeof(test_prog));
-	llvm_bpf_jit_context ctx(vm);
 	auto result = *ctx.generate_ptx(false, "bpf_main", "sm_60");
+
 	{
 		std::ofstream ofs_result("out.ptx");
 		ofs_result << result;

@@ -60,7 +60,7 @@ option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 if(ENABLE_LLVM_SHARED)
     list(PREPEND LLVM_LIBS LLVM)
 else()
-    llvm_map_components_to_libnames(LLVM_LIBS
+    set(LLVM_COMPONENTS
       ${LLVM_TARGETS_TO_BUILD}
         Core
         Support
@@ -88,16 +88,24 @@ else()
         NVPTXCodeGen
         NVPTXDesc
         NVPTXInfo
-        # SPIRV
-        SPIRVCodeGen
-        SPIRVDesc
-        SPIRVInfo
         # AArch64
         AArch64CodeGen
         AArch64Desc
         AArch64Info
         AArch64AsmParser
     )
+
+    # Add SPIR-V components only if SPIR-V is enabled and LLVM version supports it
+    if(LLVMBPF_ENABLE_SPIRV AND ${LLVM_VERSION_MAJOR} GREATER_EQUAL 18)
+        list(APPEND LLVM_COMPONENTS
+            SPIRVCodeGen
+            SPIRVDesc
+            SPIRVInfo
+        )
+        message(STATUS "Adding SPIR-V LLVM components (LLVM ${LLVM_VERSION_MAJOR})")
+    endif()
+
+    llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
 endif()
 include(FetchContent)
 

@@ -12,7 +12,9 @@ This component is part of the [bpftime](https://github.com/eunomia-bpf/bpftime) 
 - Compiles eBPF ELF files into AOTed native code ELF object files, which can be linked like C-compiled objects or loaded into llvmbpf.
 - Loads and executes AOT-compiled ELF object files within the eBPF runtime.
 - Supports eBPF helpers and maps lddw functions.
-- Supports PTX generation for CUDA on GPU.
+- **GPU Execution Support**:
+  - **PTX generation for NVIDIA CUDA GPUs** with automatic compute capability detection
+  - **SPIR-V generation for cross-vendor GPUs** (Intel, AMD, NVIDIA, ARM) via OpenCL/Vulkan
 
 This library is optimized for performance, flexibility, and minimal dependencies. It does not include maps implement, helpers, verifiers, or loaders for eBPF applications, making it suitable as a lightweight, high-performance library.
 
@@ -26,7 +28,9 @@ For a comprehensive userspace eBPF runtime that includes support for maps, helpe
     - [load eBPF bytecode from ELF file](#load-ebpf-bytecode-from-elf-file)
     - [Maps and data relocation support](#maps-and-data-relocation-support)
     - [Build into standalone binary for deployment](#build-into-standalone-binary-for-deployment)
-    - [PTX generation for CUDA on GPU](#ptx-generation-for-cuda-on-gpu)
+    - [GPU Execution](#gpu-execution)
+      - [PTX for NVIDIA CUDA GPUs](#ptx-for-nvidia-cuda-gpus)
+      - [SPIR-V for Cross-Vendor GPUs](#spir-v-for-cross-vendor-gpus)
   - [optimizaion](#optimizaion)
     - [inline the maps and helper function](#inline-the-maps-and-helper-function)
     - [Use original LLVM IR from C code](#use-original-llvm-ir-from-c-code)
@@ -381,27 +385,28 @@ clang -g main.c xdp-counter.ll -o standalone
 
 And you can run the `standalone` eBPF program directly.
 
-## PTX generation for CUDA on GPU
+## GPU Execution
 
-llvmbpf can generate PTX code for CUDA and run eBPF program on GPU. See [example/ptx](example/ptx) for an example.
+llvmbpf supports running eBPF programs on GPUs through two backends:
 
-```sh
-# set the CUDA path, for example, /usr/local/cuda-12.6
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_PTX=1 -DLLVMBPF_CUDA_PATH=/usr/local/cuda-12.6
-cmake --build build --target all -j
-```
+| Backend | Target GPUs | Use Cases | Requirements |
+|---------|-------------|-----------|--------------|
+| **SPIR-V** | Intel, AMD, NVIDIA, ARM, Mali, PowerVR | Cross-vendor, OpenCL, Vulkan, portability | LLVM 18+ (LLVM 20+ recommended) |
+| **PTX** | NVIDIA CUDA | NVIDIA-specific, maximum performance | CUDA Toolkit, LLVM 15+ |
 
-Run the PTX example:
+Both backends support **automatic GPU architecture detection** and generate optimized code for the detected hardware.
 
-```sh
-build/example/ptx/ptx_test
-```
+### SPIR-V for Cross-Vendor GPUs
 
-## SPIR-V generation for OpenCL/Vulkan on GPU
+Generate SPIR-V binary for execution on **any GPU vendor** via OpenCL or Vulkan. SPIR-V is an industry-standard intermediate representation that works across Intel, AMD, NVIDIA, ARM, and other GPU vendors.
 
-llvmbpf can generate SPIR-V binary for cross-vendor GPU execution via OpenCL or Vulkan. Unlike PTX which is NVIDIA-specific, SPIR-V works on Intel, AMD, NVIDIA, ARM GPUs, and more. See [example/spirv](example/spirv) for details.
+**Features:**
+- Cross-vendor GPU support (Intel, AMD, NVIDIA, ARM, Mali, etc.)
+- Works with OpenCL, Vulkan Compute, and Level Zero
+- Uses LLVM's native SPIR-V backend (LLVM 20+)
+- Automatic patching for OpenCL kernel compatibility
 
-**Requirements**: LLVM 18+ (LLVM 20+ recommended for native SPIR-V backend), OpenCL development files
+**Build and Run:**
 
 ```sh
 # Install dependencies (Ubuntu/Debian)
@@ -412,18 +417,54 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
     -DLLVMBPF_ENABLE_SPIRV=1 \
     -DLLVM_DIR=/usr/lib/llvm-20/cmake
 cmake --build build --target spirv_opencl_test -j
+
+# Run on any available GPU (Intel, AMD, NVIDIA, etc.)
+./build/example/spirv/spirv_opencl_test
 ```
 
-Run the SPIR-V example:
+**Output Example (Intel GPU):**
+```
+SPIR-V target found successfully
+Generating SPIR-V from eBPF program...
+Found GPU on platform: Intel(R) OpenCL Graphics
+Using OpenCL device: Intel(R) Graphics
+Executing eBPF program on GPU via OpenCL...
+✓ Test PASSED!
+```
+
+See [example/spirv](example/spirv) for detailed documentation and examples.
+
+### PTX for NVIDIA CUDA GPUs
+
+Generate PTX code for NVIDIA GPUs with automatic compute capability detection. PTX provides direct access to NVIDIA-specific features and maximum performance on CUDA hardware.
+
+**Features:**
+- NVIDIA CUDA GPU support with automatic compute capability detection (sm_XX)
+- Direct PTX generation from eBPF bytecode
+- Optimized for NVIDIA hardware (from Kepler to latest Hopper/Blackwell)
+- Host-device communication via trampoline
+
+**Build and Run:**
 
 ```sh
-build/example/spirv/spirv_opencl_test
+# Build with PTX support (set CUDA path)
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    -DLLVMBPF_ENABLE_PTX=1 \
+    -DLLVMBPF_CUDA_PATH=/usr/local/cuda
+cmake --build build --target ptx_test -j
+
+# Run on NVIDIA GPU (auto-detects compute capability)
+./build/example/ptx/ptx_test
 ```
 
-The generated SPIR-V binary can be used with:
-- **OpenCL** (any vendor: Intel, AMD, NVIDIA, ARM)
-- **Vulkan Compute Shaders**
-- **Level Zero** (Intel)
+**Output Example (RTX 5090):**
+```
+Detected GPU: NVIDIA GeForce RTX 5090 with compute capability 12.0 (using sm_120)
+Generating PTX for sm_120...
+ptxas info: Compiling entry function 'bpf_main' for 'sm_120'
+```
+
+See [example/ptx](example/ptx) for detailed documentation and examples.
 
 ## optimizaion
 

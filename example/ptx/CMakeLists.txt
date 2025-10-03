@@ -1,5 +1,9 @@
 add_executable(ptx_test ptx_test.cpp)
-find_package(spdlog REQUIRED)
+
+# spdlog is provided by parent CMakeLists.txt via FetchContent
+if(NOT TARGET spdlog::spdlog)
+    find_package(spdlog REQUIRED)
+endif()
 
 option(LLVMBPF_CUDA_PATH "Path where CUDA installs")
 message(STATUS "LLVMBPF_CUDA_PATH=${LLVMBPF_CUDA_PATH}")

@@ -1,5 +1,9 @@
 add_executable(spirv_opencl_test spirv_opencl_test.cpp)
-find_package(spdlog REQUIRED)
+
+# spdlog is provided by parent CMakeLists.txt via FetchContent
+if(NOT TARGET spdlog::spdlog)
+    find_package(spdlog REQUIRED)
+endif()
 
 # Find OpenCL
 find_package(OpenCL REQUIRED)

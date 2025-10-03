@@ -113,7 +113,22 @@ static const struct ebpf_inst test_prog[] = {
 
 };
 
-static std::vector<char> compile(const std::string &ptx)
+// Detect GPU compute capability
+static std::string detect_gpu_arch()
+{
+	int device = 0;
+	cudaDeviceProp prop;
+
+	CUDA_SAFE_CALL_2(cudaGetDevice(&device));
+	CUDA_SAFE_CALL_2(cudaGetDeviceProperties(&prop, device));
+
+	std::string arch = "sm_" + std::to_string(prop.major) + std::to_string(prop.minor);
+	printf("Detected GPU: %s with compute capability %d.%d (using %s)\n",
+	       prop.name, prop.major, prop.minor, arch.c_str());
+	return arch;
+}
+
+static std::vector<char> compile(const std::string &ptx, const std::string &gpu_arch)
 {
 	nvPTXCompilerHandle compiler = NULL;
 	nvPTXCompileResult status;
@@ -121,7 +136,8 @@ static std::vector<char> compile(const std::string &ptx)
 	size_t elfSize, infoSize, errorSize;
 	unsigned int minorVer, majorVer;
 
-	const char *compile_options[] = { "--gpu-name=sm_60", "--verbose" };
+	std::string gpu_option = "--gpu-name=" + gpu_arch;
+	const char *compile_options[] = { gpu_option.c_str(), "--verbose" };
 
 	NVPTXCOMPILER_SAFE_CALL(nvPTXCompilerGetVersion(&majorVer, &minorVer));
 	printf("Current PTX Compiler API Version : %d.%d\n", majorVer,
@@ -366,7 +382,7 @@ std::string wrap_ptx_with_trampoline(std::string input)
 {
 	return get_defaul_trampoline_ptx() + input;
 }
-std::string patch_helper_names_and_header(std::string result)
+std::string patch_helper_names_and_header(std::string result, const std::string &gpu_arch)
 {
 	const std::string to_replace_names[][2] = {
 		{ "_bpf_helper_ext_0001", "_bpf_helper_ext_0001_dup" },
@@ -375,23 +391,39 @@ std::string patch_helper_names_and_header(std::string result)
 		{ "_bpf_helper_ext_0006", "_bpf_helper_ext_0006_dup" },
 
 	};
-	const std::string version_headers[] = {
-		".version 3.2\n.target sm_60\n.address_size 64\n",
-		".version 5.0\n.target sm_60\n.address_size 64\n"
-	};
 	for (const auto &entry : to_replace_names) {
 		auto idx = result.find(entry[0]);
 		if (idx != result.npos) {
 			result = result.replace(idx, entry[0].size(), entry[1]);
 		}
 	}
-	for (const auto &header : version_headers) {
-		auto idx = result.find(header);
-		printf("Version header (%s) index: %d\n", header.c_str(), idx);
-		if (idx != result.npos) {
-			result = result.replace(idx, header.size(), "");
+
+	// Remove all version headers dynamically by finding patterns like:
+	// .version X.Y\n.target sm_XX\n.address_size 64\n
+	size_t pos = 0;
+	while ((pos = result.find(".version ", pos)) != std::string::npos) {
+		// Find the end of this header block (ends after .address_size line)
+		size_t addr_pos = result.find(".address_size", pos);
+		if (addr_pos != std::string::npos) {
+			size_t end_pos = result.find('\n', addr_pos);
+			if (end_pos != std::string::npos) {
+				std::string header = result.substr(pos, end_pos - pos + 1);
+				printf("Removing version header: %s", header.c_str());
+				result.erase(pos, end_pos - pos + 1);
+				// Don't increment pos, check same position again
+				continue;
+			}
 		}
+		pos++;
 	}
+
+	// Remove .noreturn directive (not supported in older PTX assemblers)
+	pos = 0;
+	while ((pos = result.find(".noreturn\n", pos)) != std::string::npos) {
+		printf("Removing .noreturn directive at position %zu\n", pos);
+		result.erase(pos, 10); // length of ".noreturn\n"
+	}
+
 	return result;
 }
 std::string patch_main_from_func_to_entry(std::string result)
@@ -411,6 +443,9 @@ std::string patch_main_from_func_to_entry(std::string result)
 int main()
 {
 	signal(SIGINT, signal_handler);
+
+	// Detect GPU architecture
+	std::string gpu_arch = detect_gpu_arch();
 
 	llvmbpf_vm vm;
 	vm.register_external_function(1, "map_lookup", (void *)test_func);
@@ -432,17 +467,20 @@ int main()
 				"Failed to find NVPTX target: " + error);
 		}
 	}
-	auto result = *ctx.generate_ptx(false, "bpf_main", "sm_60");
+
+	// Use detected GPU architecture for PTX generation
+	printf("Generating PTX for %s...\n", gpu_arch.c_str());
+	auto result = *ctx.generate_ptx(false, "bpf_main", gpu_arch.c_str());
 
 	{
 		std::ofstream ofs_result("out.ptx");
 		ofs_result << result;
 	}
 	result = wrap_ptx_with_trampoline(patch_helper_names_and_header(
-		patch_main_from_func_to_entry(result)));
+		patch_main_from_func_to_entry(result), gpu_arch));
 	// auto result = load_local_ptx();
 	cout << result << std::endl;
-	auto bin = compile(result);
+	auto bin = compile(result, gpu_arch);
 	// std::ofstream ofs("out.bin", ios::binary);
 	// ofs.write(bin.data(), bin.size());
 	// ofs.flush();

@@ -21,12 +21,13 @@ find_library(NVPTXCOMPILER_LIB
 if(NOT NVPTXCOMPILER_LIB)
     message(FATAL_ERROR "nvptxcompiler_static library not found in ${LLVMBPF_CUDA_PATH}/lib64 or ${LLVMBPF_CUDA_PATH}/lib64/stubs")
 endif()
-target_link_libraries(ptx_test 
-            PRIVATE 
-            ${LLVM_LIBS} 
-            llvmbpf_vm 
-            cuda 
-            ${NVPTXCOMPILER_LIB} 
+target_link_libraries(ptx_test
+            PRIVATE
+            ${LLVM_LIBS}
+            llvmbpf_vm
+            cuda
+            cudart
+            ${NVPTXCOMPILER_LIB}
             spdlog::spdlog)
   
 add_dependencies(ptx_test llvmbpf_vm spdlog::spdlog)

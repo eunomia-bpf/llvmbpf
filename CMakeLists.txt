@@ -88,6 +88,10 @@ else()
         NVPTXCodeGen
         NVPTXDesc
         NVPTXInfo
+        # SPIRV
+        SPIRVCodeGen
+        SPIRVDesc
+        SPIRVInfo
         # AArch64
         AArch64CodeGen
         AArch64Desc
@@ -160,7 +164,12 @@ add_subdirectory(example)
 
 
 option(LLVMBPF_ENABLE_PTX "Whether build the ptx demo program, which requires CUDA" OFF)
+option(LLVMBPF_ENABLE_SPIRV "Whether build the SPIR-V demo program, which requires OpenCL" OFF)
 
 if(LLVMBPF_ENABLE_PTX)
     add_subdirectory(example/ptx)
+endif()
+
+if(LLVMBPF_ENABLE_SPIRV)
+    add_subdirectory(example/spirv)
 endif()

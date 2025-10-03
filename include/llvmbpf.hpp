@@ -82,6 +82,8 @@ class llvmbpf_vm {
 			      uint64_t (*code_addr)(uint32_t)) noexcept;
 	std::optional<std::string>
 	generate_ptx(const char *target_cpu = "sm_60");
+	std::optional<std::vector<uint8_t>>
+	generate_spirv(const char *target_env = "");
 
     private:
 	// See spec for details

@@ -397,6 +397,32 @@ Run the PTX example:
 build/example/ptx/ptx_test
 ```
 
+## SPIR-V generation for OpenCL/Vulkan on GPU
+
+llvmbpf can generate SPIR-V binary for cross-vendor GPU execution via OpenCL or Vulkan. Unlike PTX which is NVIDIA-specific, SPIR-V works on Intel, AMD, NVIDIA, ARM GPUs, and more. See [example/spirv](example/spirv) for details.
+
+**Requirements**: LLVM 16+ with SPIR-V backend support, OpenCL development files
+
+```sh
+# Install dependencies (Ubuntu/Debian)
+sudo apt install llvm-16-dev opencl-headers ocl-icd-opencl-dev
+
+# Build with SPIR-V support
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_SPIRV=1
+cmake --build build --target spirv_opencl_test -j
+```
+
+Run the SPIR-V example:
+
+```sh
+build/example/spirv/spirv_opencl_test
+```
+
+The generated SPIR-V binary can be used with:
+- **OpenCL** (any vendor: Intel, AMD, NVIDIA, ARM)
+- **Vulkan Compute Shaders**
+- **Level Zero** (Intel)
+
 ## optimizaion
 
 Based on the AOT compiler, we can apply some optimization strategies:

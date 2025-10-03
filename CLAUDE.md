@@ -31,6 +31,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_PTX=1 -DLLVMBPF_CUDA_
 cmake --build build --target all -j
 ```
 
+### Build with SPIR-V/OpenCL Support
+```sh
+# Requires LLVM 16+ with SPIR-V backend
+sudo apt install llvm-16-dev opencl-headers ocl-icd-opencl-dev
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_SPIRV=1
+cmake --build build --target spirv_opencl_test -j
+```
+
 ### Build for Development/Testing
 ```sh
 # With unit tests and code coverage
@@ -64,6 +72,7 @@ pytest -k "test_jit.py and not err-infinite"
 ./build/vm-llvm-example
 ./build/maps-example
 ./build/example/ptx/ptx_test  # If built with PTX support
+./build/example/spirv/spirv_opencl_test  # If built with SPIR-V support
 ```
 
 ## Architecture
@@ -110,7 +119,8 @@ Register eBPF helpers via `register_external_function(index, name, fn_ptr)`. The
 **AOT Mode**: `do_aot_compile()` generates native ELF object files that can be:
 - Linked with C code to create standalone binaries
 - Loaded back into the VM via `load_aot_object()`
-**PTX Mode**: `generate_ptx()` emits CUDA PTX assembly for GPU execution
+**PTX Mode**: `generate_ptx()` emits CUDA PTX assembly for NVIDIA GPU execution
+**SPIR-V Mode**: `generate_spirv()` emits SPIR-V binary for cross-vendor GPU execution (OpenCL, Vulkan)
 
 ## CLI Tool Usage
 
@@ -132,7 +142,9 @@ Note: The standalone CLI does not support helpers/maps. For full functionality, 
 
 ## Key Constraints
 
-- **LLVM Version**: Requires LLVM >= 15 (configured via `find_package(LLVM)` in CMake)
+- **LLVM Version**:
+  - Minimum: LLVM >= 15 for JIT/AOT/PTX
+  - SPIR-V: LLVM >= 16 (requires native SPIR-V backend)
 - **eBPF Stack Size**: 512 bytes (`EBPF_STACK_SIZE`)
 - **Max External Functions**: 8192 (`MAX_EXT_FUNCS`)
 - **No Built-in Maps/Helpers**: The library provides hooks but no implementations
@@ -148,4 +160,5 @@ llvmbpf is designed as a component of the larger bpftime project. For loading eB
 - `example/standalone/`: Standalone binary compilation example
 - `example/inline/`: Inlining optimization example (merge helper functions into LLVM IR)
 - `example/load-llvm-ir/`: Load original LLVM IR instead of eBPF bytecode
-- `example/ptx/`: CUDA PTX generation examples
+- `example/ptx/`: CUDA PTX generation examples (NVIDIA GPUs)
+- `example/spirv/`: SPIR-V generation examples (OpenCL, cross-vendor GPUs)

@@ -66,6 +66,10 @@ class llvm_bpf_jit_context {
 	generate_ptx(bool main_with_arguments = true,
 		     const std::string &func_name = "bpf_main",
 		     const char *target_cpu = "sm_60");
+	std::optional<std::vector<uint8_t>>
+	generate_spirv(bool main_with_arguments = true,
+		       const std::string &func_name = "bpf_main",
+		       const char *target_env = "");
 };
 
 } // namespace bpftime

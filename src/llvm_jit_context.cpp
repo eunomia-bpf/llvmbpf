@@ -686,3 +686,95 @@ llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
 		return result;
 	});
 }
+
+static std::unique_ptr<llvm::TargetMachine>
+createSPIRVTargetMachine(const char *target_cpu)
+{
+	std::string error;
+	const llvm::Target *target =
+		llvm::TargetRegistry::lookupTarget("spirv64", error);
+	if (!target) {
+		throw std::runtime_error("Failed to find SPIR-V target: " +
+					 error);
+	}
+
+	llvm::Triple triple("spirv64-unknown-unknown");
+
+	llvm::TargetOptions options;
+	options.FloatABIType = llvm::FloatABI::Default;
+	auto result = std::unique_ptr<llvm::TargetMachine>(
+		target->createTargetMachine(triple.str(), target_cpu, "",
+					    options, llvm::Reloc::Static));
+	return result;
+}
+
+std::optional<std::vector<uint8_t>>
+llvm_bpf_jit_context::generate_spirv(bool main_with_arguments,
+				     const std::string &func_name,
+				     const char *target_env)
+{
+	static ExitOnError exitOnErr;
+	spin_lock_guard guard(compiling.get());
+	auto targetMachine = createSPIRVTargetMachine(target_env);
+	std::vector<std::string> extFuncNames;
+	for (uint32_t i = 0; i < std::size(vm.ext_funcs); i++) {
+		if (vm.ext_funcs[i].has_value()) {
+			extFuncNames.push_back(ext_func_sym(i));
+		}
+	}
+	std::vector<std::string> definedLddwHelpers;
+	const auto tryDefineLddwHelper = [&](const char *name, void *func) {
+		if (func) {
+			SPDLOG_DEBUG("Defining LDDW helper {} with addr {:x}",
+				     name, (uintptr_t)func);
+			definedLddwHelpers.push_back(name);
+		}
+	};
+	// Only map_val will have a chance to be called at runtime, so it's the
+	// only symbol to be defined
+	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
+	// These symbols won't be used at runtime, because we have already
+	// do relocation when loading the eBPF bytecode
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm.map_by_fd);
+	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm.map_by_idx);
+	// tryDefineLddwHelper(LDDW_HELPER_CODE_ADDR, (void *)vm.code_addr);
+	// tryDefineLddwHelper(LDDW_HELPER_VAR_ADDR, (void *)vm.var_addr);
+
+	auto bpfModuleOrErr =
+		generateModule(extFuncNames, definedLddwHelpers, true,
+			       main_with_arguments, func_name, true);
+	if (!bpfModuleOrErr) {
+		exitOnErr(bpfModuleOrErr.takeError());
+		return {};
+	}
+
+	// If successful, get the module
+	auto bpfModule = std::move(*bpfModuleOrErr);
+	// Optimize the module
+	return bpfModule.withModuleDo([&](auto &M) -> std::optional<std::vector<uint8_t>> {
+		M.setDataLayout(targetMachine->createDataLayout());
+		optimizeModule(M);
+
+		llvm::legacy::PassManager passManager;
+#if LLVM_VERSION_MAJOR > 17
+		CodeGenFileType fileType = CodeGenFileType::ObjectFile;
+#else
+		CodeGenFileType fileType = llvm::CGFT_ObjectFile;
+#endif
+		SmallVector<char, 0> objStream;
+		std::unique_ptr<raw_svector_ostream> BOS =
+			std::make_unique<raw_svector_ostream>(objStream);
+
+		if (targetMachine->addPassesToEmitFile(passManager, *BOS,
+						       nullptr, fileType)) {
+			SPDLOG_ERROR(
+				"TargetMachine cannot emit a SPIR-V file of this type");
+			return {};
+		}
+
+		passManager.run(M);
+		std::vector<uint8_t> result(objStream.begin(), objStream.end());
+
+		return result;
+	});
+}

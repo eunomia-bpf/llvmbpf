@@ -753,6 +753,8 @@ llvm_bpf_jit_context::generate_spirv(bool main_with_arguments,
 	// Optimize the module
 	return bpfModule.withModuleDo([&](auto &M) -> std::optional<std::vector<uint8_t>> {
 		M.setDataLayout(targetMachine->createDataLayout());
+
+		// Run optimizations to clean up unreachable blocks and simplify code
 		optimizeModule(M);
 
 		llvm::legacy::PassManager passManager;

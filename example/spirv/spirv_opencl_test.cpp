@@ -17,6 +17,135 @@ using namespace std;
 
 static llvm::ExitOnError exitOnError;
 
+// Patch SPIR-V binary to add OpEntryPoint for OpenCL kernel
+// This converts a regular function into a kernel entry point
+std::vector<uint8_t> patch_spirv_add_entry_point(const std::vector<uint8_t>& spirv_in) {
+	std::vector<uint8_t> spirv = spirv_in;
+
+	// SPIR-V structure:
+	// - Header (5 words)
+	// - OpCapability instructions
+	// - OpExtInstImport
+	// - OpMemoryModel
+	// - OpEntryPoint << We need to add this
+	// - OpExecutionMode << And this
+	// - OpSource
+	// - Rest of the module
+
+	// Find the position after OpMemoryModel (opcode 14) and find bpf_main function ID
+	size_t insert_pos = 20; // After 5-word header (skip magic, version, generator, bound, schema)
+	uint32_t bpf_main_id = 0;
+	size_t linkage_cap_pos = 0;
+	size_t linkage_attr_pos = 0;
+
+	// First pass: find OpMemoryModel, OpCapability Linkage, OpDecorate LinkageAttributes, and bpf_main function
+	size_t scan_pos = 20;
+	while (scan_pos < spirv.size()) {
+		uint32_t* word = (uint32_t*)&spirv[scan_pos];
+		uint16_t opcode = *word & 0xFFFF;
+		uint16_t word_count = (*word >> 16) & 0xFFFF;
+
+		if (opcode == 17) { // OpCapability
+			uint32_t capability = *(word + 1);
+			if (capability == 5) { // Linkage capability
+				linkage_cap_pos = scan_pos;
+			}
+		}
+
+		if (opcode == 14) { // OpMemoryModel
+			insert_pos = scan_pos + word_count * 4;
+		}
+
+		// OpDecorate (71) - check if this is LinkageAttributes
+		if (opcode == 71 && word_count >= 3) {
+			uint32_t decoration = *(word + 2);
+			if (decoration == 41) { // LinkageAttributes decoration
+				uint32_t target_id = *(word + 1);
+				// We'll check if this is for bpf_main later
+				if (linkage_attr_pos == 0 || target_id == bpf_main_id) {
+					linkage_attr_pos = scan_pos;
+				}
+			}
+		}
+
+		// OpFunction (54) - check if this is bpf_main
+		if (opcode == 54 && word_count >= 5) {
+			uint32_t function_result_id = *(word + 2);
+			// We'll verify this is bpf_main by checking OpName later
+			// For now, assume the first OpFunction after OpMemoryModel is bpf_main
+			if (bpf_main_id == 0) {
+				bpf_main_id = function_result_id;
+			}
+		}
+
+		scan_pos += word_count * 4;
+		if (scan_pos > 1000) break; // Safety check
+	}
+
+	if (bpf_main_id == 0) {
+		std::cerr << "Warning: Could not find bpf_main function ID, using default" << std::endl;
+		bpf_main_id = 5; // Fallback
+	}
+
+	// Remove OpCapability Linkage (opcode 17, capability 5)
+	if (linkage_cap_pos > 0) {
+		uint32_t* word = (uint32_t*)&spirv[linkage_cap_pos];
+		uint16_t word_count = (*word >> 16) & 0xFFFF;
+		spirv.erase(spirv.begin() + linkage_cap_pos,
+		            spirv.begin() + linkage_cap_pos + word_count * 4);
+
+		// Adjust insert_pos if it's after the removed capability
+		if (insert_pos > linkage_cap_pos) {
+			insert_pos -= word_count * 4;
+		}
+		// Adjust linkage_attr_pos if it's after the removed capability
+		if (linkage_attr_pos > linkage_cap_pos) {
+			linkage_attr_pos -= word_count * 4;
+		}
+	}
+
+	// Remove OpDecorate LinkageAttributes for bpf_main
+	if (linkage_attr_pos > 0) {
+		uint32_t* word = (uint32_t*)&spirv[linkage_attr_pos];
+		uint16_t word_count = (*word >> 16) & 0xFFFF;
+		spirv.erase(spirv.begin() + linkage_attr_pos,
+		            spirv.begin() + linkage_attr_pos + word_count * 4);
+
+		// Adjust insert_pos if it's after the removed decoration
+		if (insert_pos > linkage_attr_pos) {
+			insert_pos -= word_count * 4;
+		}
+	}
+
+	// Create OpEntryPoint instruction
+	// OpEntryPoint Kernel %bpf_main "bpf_main"
+	// Format: [word_count << 16 | opcode] [execution_model] [entry_point_id] [name...]
+	std::string kernel_name = "bpf_main";
+	size_t name_words = (kernel_name.length() + 1 + 3) / 4; // +1 for null, round up to word boundary
+	uint16_t entry_point_word_count = 3 + name_words;
+
+	std::vector<uint32_t> entry_point_inst;
+	entry_point_inst.push_back((entry_point_word_count << 16) | 15); // OpEntryPoint = 15
+	entry_point_inst.push_back(6); // Kernel execution model
+	entry_point_inst.push_back(bpf_main_id); // %bpf_main function ID (dynamically found)
+
+	// Add kernel name as words
+	for (size_t i = 0; i < name_words; i++) {
+		uint32_t word = 0;
+		for (int j = 0; j < 4 && (i * 4 + j) <= kernel_name.length(); j++) {
+			word |= ((uint32_t)kernel_name[i * 4 + j]) << (j * 8);
+		}
+		entry_point_inst.push_back(word);
+	}
+
+	// Insert the OpEntryPoint instruction
+	spirv.insert(spirv.begin() + insert_pos,
+	             (uint8_t*)entry_point_inst.data(),
+	             (uint8_t*)entry_point_inst.data() + entry_point_inst.size() * 4);
+
+	return spirv;
+}
+
 static uint64_t test_func(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
 {
 	return 0;
@@ -34,24 +163,23 @@ static uint64_t test_func(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
 
 /**
  * Simple eBPF program that performs basic arithmetic
- * Input: array of integers
- * Output: sum of first element + 42
+ * Input: pointer to int array
+ * Reads from arr[0], adds 42, writes to arr[1]
  *
  * Equivalent C code:
- * int bpf_main(void* ctx, unsigned long len) {
- *     int* arr = (int*)ctx;
- *     return arr[0] + 42;
+ * void bpf_main(int* arr, unsigned long len) {
+ *     arr[1] = arr[0] + 42;
  * }
  */
 static const struct ebpf_inst test_prog[] = {
-	// r6 = r1 (save input pointer)
+	// r6 = r1 (save array pointer)
 	{ EBPF_OP_MOV64_REG, 6, 1, 0, 0 },
-	// r1 = *(u32 *)(r6 + 0) - load first integer
+	// r1 = *(u32 *)(r6 + 0) - load arr[0]
 	{ EBPF_OP_LDXW, 1, 6, 0, 0 },
 	// r1 += 42
 	{ EBPF_OP_ADD64_IMM, 1, 0, 0, 42 },
-	// r0 = r1 (set return value)
-	{ EBPF_OP_MOV64_REG, 0, 1, 0, 0 },
+	// *(u32 *)(r6 + 4) = r1 - store to arr[1]
+	{ EBPF_OP_STXW, 6, 1, 4, 0 },
 	// exit
 	{ EBPF_OP_EXIT, 0, 0, 0, 0 }
 };
@@ -99,6 +227,12 @@ int main()
 
 	std::vector<uint8_t> spirv_binary = *spirv_result;
 	std::cout << "Generated SPIR-V binary: " << spirv_binary.size()
+		  << " bytes" << std::endl;
+
+	// Patch SPIR-V to add OpEntryPoint (similar to PTX's .entry patch)
+	std::cout << "Patching SPIR-V to add kernel entry point..." << std::endl;
+	spirv_binary = patch_spirv_add_entry_point(spirv_binary);
+	std::cout << "Patched SPIR-V binary: " << spirv_binary.size()
 		  << " bytes" << std::endl;
 
 	// Save SPIR-V to file for inspection
@@ -211,25 +345,19 @@ int main()
 	}
 	CL_CHECK(err);
 
-	// Prepare input/output data
-	int input_data[4] = { 100, 200, 300, 400 };
-	int output_data = 0;
+	// Prepare input/output data (arr[0] = 100, arr[1] will be set to 100+42=142)
+	int data[4] = { 100, 0, 0, 0 };
 
-	// Create buffers
-	cl_mem input_buffer = clCreateBuffer(
-		context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		sizeof(input_data), input_data, &err);
+	// Create buffer for the array (read-write)
+	cl_mem buffer = clCreateBuffer(
+		context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+		sizeof(data), data, &err);
 	CL_CHECK(err);
 
-	cl_mem output_buffer =
-		clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(int), NULL,
-			       &err);
-	CL_CHECK(err);
-
-	// Set kernel arguments
-	uint64_t input_size = sizeof(input_data);
-	CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &input_buffer));
-	CL_CHECK(clSetKernelArg(kernel, 1, sizeof(uint64_t), &input_size));
+	// Set kernel arguments: (buffer, size)
+	uint64_t buffer_size = sizeof(data);
+	CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &buffer));
+	CL_CHECK(clSetKernelArg(kernel, 1, sizeof(uint64_t), &buffer_size));
 
 	// Execute kernel
 	std::cout << "Executing eBPF program on GPU via OpenCL..."
@@ -239,17 +367,16 @@ int main()
 					&global_work_size, NULL, 0, NULL,
 					NULL));
 
-	// Read result
-	CL_CHECK(clEnqueueReadBuffer(queue, output_buffer, CL_TRUE, 0,
-				     sizeof(int), &output_data, 0, NULL,
-				     NULL));
+	// Read result back
+	CL_CHECK(clEnqueueReadBuffer(queue, buffer, CL_TRUE, 0,
+				     sizeof(data), data, 0, NULL, NULL));
 
 	// Verify result
-	std::cout << "Input value: " << input_data[0] << std::endl;
-	std::cout << "Expected output: " << (input_data[0] + 42) << std::endl;
-	std::cout << "Actual output: " << output_data << std::endl;
+	std::cout << "Input value (arr[0]): " << data[0] << std::endl;
+	std::cout << "Expected output (arr[1]): " << (data[0] + 42) << std::endl;
+	std::cout << "Actual output (arr[1]): " << data[1] << std::endl;
 
-	bool success = (output_data == input_data[0] + 42);
+	bool success = (data[1] == data[0] + 42);
 	if (success) {
 		std::cout << "✓ Test PASSED!" << std::endl;
 	} else {
@@ -257,8 +384,7 @@ int main()
 	}
 
 	// Cleanup
-	clReleaseMemObject(input_buffer);
-	clReleaseMemObject(output_buffer);
+	clReleaseMemObject(buffer);
 	clReleaseKernel(kernel);
 	clReleaseProgram(program);
 	clReleaseCommandQueue(queue);

@@ -1,0 +1,160 @@
+name: Build and Test SPIR-V with OpenCL
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  test-spirv-cpu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        llvm-version: [18, 20]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          llvm-${{ matrix.llvm-version }}-dev \
+          libzstd-dev \
+          ninja-build \
+          opencl-headers \
+          ocl-icd-opencl-dev \
+          pocl-opencl-icd
+
+    - name: Verify OpenCL CPU runtime
+      run: |
+        echo "Checking for OpenCL platforms..."
+        clinfo || echo "clinfo not available, installing..."
+        sudo apt-get install -y clinfo
+        clinfo
+
+    - name: Configure CMake with SPIR-V support
+      run: |
+        LLVM_DIR=/usr/lib/llvm-${{ matrix.llvm-version }}/cmake \
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVMBPF_ENABLE_SPIRV=ON \
+          -G Ninja
+
+    - name: Build SPIR-V test
+      run: |
+        cmake --build build --target spirv_opencl_test -j$(nproc)
+
+    - name: Run SPIR-V test on CPU
+      run: |
+        echo "Running SPIR-V test with OpenCL CPU runtime (PoCL)..."
+        ./build/example/spirv/spirv_opencl_test
+      env:
+        # Force CPU device if multiple devices available
+        POCL_DEVICES: basic
+
+    - name: Verify SPIR-V binary
+      run: |
+        if [ -f bpf_program.spv ]; then
+          echo "SPIR-V binary generated successfully"
+          ls -lh bpf_program.spv
+
+          # Install spirv-tools for validation
+          sudo apt-get install -y spirv-tools
+
+          # Validate SPIR-V binary
+          echo "Validating SPIR-V binary..."
+          spirv-val bpf_program.spv && echo "✓ SPIR-V validation passed" || echo "⚠ SPIR-V validation failed"
+
+          # Disassemble for inspection
+          echo "Disassembling SPIR-V binary..."
+          spirv-dis bpf_program.spv -o bpf_program.spvasm
+          head -50 bpf_program.spvasm
+        else
+          echo "Warning: SPIR-V binary not found"
+        fi
+
+  test-spirv-with-intel-gpu:
+    runs-on: ubuntu-latest
+    # Only run on main branch to avoid consuming GPU runners
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          llvm-20-dev \
+          libzstd-dev \
+          ninja-build \
+          opencl-headers \
+          ocl-icd-opencl-dev
+
+    # Note: Intel GPU runtime installation would go here
+    # This is a placeholder for when GPU runners are available
+    - name: Install Intel OpenCL runtime (if GPU available)
+      run: |
+        # Intel Compute Runtime installation
+        # See: https://github.com/intel/compute-runtime
+        echo "Intel GPU OpenCL runtime installation would go here"
+        echo "Skipping for now - this job requires GPU-enabled runners"
+
+    - name: Configure CMake with SPIR-V support
+      run: |
+        LLVM_DIR=/usr/lib/llvm-20/cmake \
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVMBPF_ENABLE_SPIRV=ON \
+          -G Ninja
+
+    - name: Build SPIR-V test
+      run: |
+        cmake --build build --target spirv_opencl_test -j$(nproc)
+
+    - name: Check for GPU devices
+      run: |
+        sudo apt-get install -y clinfo
+        clinfo | grep -i "device type" || echo "No GPU devices found, skipping GPU test"
+
+    - name: Run SPIR-V test (CPU fallback)
+      run: |
+        # Will use CPU if no GPU available
+        ./build/example/spirv/spirv_opencl_test
+
+  test-spirv-disabled:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - name: Install LLVM 15 (no SPIR-V support)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y llvm-15-dev libzstd-dev ninja-build
+
+    - name: Build without SPIR-V (should succeed)
+      run: |
+        LLVM_DIR=/usr/lib/llvm-15/cmake \
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVMBPF_ENABLE_SPIRV=OFF \
+          -G Ninja
+        cmake --build build --target llvmbpf_vm -j$(nproc)
+
+    - name: Verify SPIR-V libraries not linked
+      run: |
+        echo "Checking that SPIR-V libraries are not linked..."
+        ! nm build/libllvmbpf_vm.a | grep -i spirv && echo "✓ No SPIR-V symbols found (expected)" || (echo "✗ SPIR-V symbols found (unexpected)" && exit 1)

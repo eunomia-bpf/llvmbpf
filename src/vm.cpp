@@ -161,5 +161,5 @@ std::optional<std::string> llvmbpf_vm::generate_ptx(const char *target_cpu)
 std::optional<std::vector<uint8_t>>
 llvmbpf_vm::generate_spirv(const char *target_env)
 {
-	return this->jit_ctx->generate_spirv(false, "bpf_main", target_env);
+	return this->jit_ctx->generate_spirv(true, "bpf_main", target_env);
 }

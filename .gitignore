@@ -22,3 +22,4 @@ dump*.txt
 /a.out
 /out.ptx
 /test.*
+/bpf_program.spv

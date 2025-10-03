@@ -17,7 +17,7 @@ SPIR-V (Standard Portable Intermediate Representation - V) is a cross-vendor int
 
 ### Build Requirements
 
-- **LLVM 16+** with SPIR-V backend support
+- **LLVM 18+** (LLVM 20+ has native SPIR-V backend, LLVM 18-19 requires llvm-spirv translator)
 - **OpenCL development files**:
   ```bash
   # Ubuntu/Debian
@@ -39,12 +39,13 @@ SPIR-V (Standard Portable Intermediate Representation - V) is a cross-vendor int
 ## Building
 
 ```bash
-# Set LLVM path if using custom installation
-export LLVM_DIR=/usr/lib/llvm-16/cmake
+# Install LLVM 20 (recommended for native SPIR-V support)
+sudo apt install llvm-20-dev
 
 # Configure with SPIR-V support
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
-    -DLLVMBPF_ENABLE_SPIRV=1
+    -DLLVMBPF_ENABLE_SPIRV=1 \
+    -DLLVM_DIR=/usr/lib/llvm-20/cmake
 
 # Build
 cmake --build build --target spirv_opencl_test -j
@@ -147,18 +148,18 @@ GPU Execution
 
 ### "SPIR-V target not found"
 
-**Cause**: LLVM installation doesn't include SPIR-V backend (need LLVM 16+)
+**Cause**: LLVM installation doesn't include SPIR-V backend (need LLVM 18+, native in LLVM 20+)
 
 **Solution**:
 ```bash
 # Check LLVM version
-llvm-config --version  # Should be 16.0 or higher
+llvm-config --version  # Should be 18.0 or higher
 
-# Verify SPIR-V target is available
-llc --version | grep -i spirv
+# Verify SPIR-V target is available (LLVM 20+)
+llc-20 --version | grep -i spirv
 
-# Install LLVM 16+ with SPIR-V support
-sudo apt install llvm-16-dev
+# Install LLVM 20 with native SPIR-V support
+sudo apt install llvm-20-dev
 ```
 
 ### "OpenCL implementation may not support SPIR-V IL"

@@ -117,12 +117,45 @@ int main()
 	cl_kernel kernel;
 	cl_int err;
 
-	// Get platform
-	CL_CHECK(clGetPlatformIDs(1, &platform, NULL));
+	// Get all platforms and try to find a device
+	cl_uint num_platforms;
+	CL_CHECK(clGetPlatformIDs(0, NULL, &num_platforms));
+	std::vector<cl_platform_id> platforms(num_platforms);
+	CL_CHECK(clGetPlatformIDs(num_platforms, platforms.data(), NULL));
 
-	// Get device
-	CL_CHECK(clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device,
-				NULL));
+	bool device_found = false;
+	for (cl_uint i = 0; i < num_platforms && !device_found; i++) {
+		platform = platforms[i];
+		char platform_name[128];
+		clGetPlatformInfo(platform, CL_PLATFORM_NAME,
+				  sizeof(platform_name), platform_name, NULL);
+
+		// Try GPU first
+		err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device,
+				     NULL);
+		if (err == CL_SUCCESS) {
+			device_found = true;
+			std::cout << "Found GPU on platform: "
+				  << platform_name << std::endl;
+			break;
+		}
+
+		// Try CPU as fallback
+		err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &device,
+				     NULL);
+		if (err == CL_SUCCESS) {
+			device_found = true;
+			std::cout << "Found CPU on platform: "
+				  << platform_name << std::endl;
+			break;
+		}
+	}
+
+	if (!device_found) {
+		std::cerr << "No OpenCL devices found on any platform!"
+			  << std::endl;
+		return 1;
+	}
 
 	// Get device name
 	char device_name[128];
@@ -168,7 +201,14 @@ int main()
 	}
 
 	// Create kernel
+	std::cout << "Creating kernel 'bpf_main'..." << std::endl;
 	kernel = clCreateKernel(program, "bpf_main", &err);
+	if (err != CL_SUCCESS) {
+		// Try to get kernel names
+		cl_uint num_kernels;
+		clCreateKernelsInProgram(program, 0, NULL, &num_kernels);
+		std::cerr << "Failed to create kernel. Number of kernels in program: " << num_kernels << std::endl;
+	}
 	CL_CHECK(err);
 
 	// Prepare input/output data
@@ -187,9 +227,9 @@ int main()
 	CL_CHECK(err);
 
 	// Set kernel arguments
+	uint64_t input_size = sizeof(input_data);
 	CL_CHECK(clSetKernelArg(kernel, 0, sizeof(cl_mem), &input_buffer));
-	CL_CHECK(clSetKernelArg(kernel, 1, sizeof(uint64_t),
-				&(uint64_t){ sizeof(input_data) }));
+	CL_CHECK(clSetKernelArg(kernel, 1, sizeof(uint64_t), &input_size));
 
 	// Execute kernel
 	std::cout << "Executing eBPF program on GPU via OpenCL..."

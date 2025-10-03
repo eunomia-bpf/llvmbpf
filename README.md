@@ -401,14 +401,16 @@ build/example/ptx/ptx_test
 
 llvmbpf can generate SPIR-V binary for cross-vendor GPU execution via OpenCL or Vulkan. Unlike PTX which is NVIDIA-specific, SPIR-V works on Intel, AMD, NVIDIA, ARM GPUs, and more. See [example/spirv](example/spirv) for details.
 
-**Requirements**: LLVM 16+ with SPIR-V backend support, OpenCL development files
+**Requirements**: LLVM 18+ (LLVM 20+ recommended for native SPIR-V backend), OpenCL development files
 
 ```sh
 # Install dependencies (Ubuntu/Debian)
-sudo apt install llvm-16-dev opencl-headers ocl-icd-opencl-dev
+sudo apt install llvm-20-dev opencl-headers ocl-icd-opencl-dev
 
 # Build with SPIR-V support
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_SPIRV=1
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    -DLLVMBPF_ENABLE_SPIRV=1 \
+    -DLLVM_DIR=/usr/lib/llvm-20/cmake
 cmake --build build --target spirv_opencl_test -j
 ```
 

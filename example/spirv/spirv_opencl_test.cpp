@@ -17,6 +17,14 @@ using namespace std;
 
 static llvm::ExitOnError exitOnError;
 
+// SPIR-V opcodes (from SPIR-V specification)
+constexpr uint16_t OpMemoryModel = 14;
+constexpr uint16_t OpCapability = 17;
+constexpr uint16_t OpFunction = 54;
+constexpr uint16_t OpDecorate = 71;
+constexpr uint32_t LinkageCapability = 5;
+constexpr uint32_t LinkageAttributesDecoration = 41;
+
 // Patch SPIR-V binary to add OpEntryPoint for OpenCL kernel
 // This converts a regular function into a kernel entry point
 std::vector<uint8_t> patch_spirv_add_entry_point(const std::vector<uint8_t>& spirv_in) {
@@ -45,21 +53,21 @@ std::vector<uint8_t> patch_spirv_add_entry_point(const std::vector<uint8_t>& spi
 		uint16_t opcode = *word & 0xFFFF;
 		uint16_t word_count = (*word >> 16) & 0xFFFF;
 
-		if (opcode == 17) { // OpCapability
+		if (opcode == OpCapability) {
 			uint32_t capability = *(word + 1);
-			if (capability == 5) { // Linkage capability
+			if (capability == LinkageCapability) {
 				linkage_cap_pos = scan_pos;
 			}
 		}
 
-		if (opcode == 14) { // OpMemoryModel
+		if (opcode == OpMemoryModel) {
 			insert_pos = scan_pos + word_count * 4;
 		}
 
-		// OpDecorate (71) - check if this is LinkageAttributes
-		if (opcode == 71 && word_count >= 3) {
+		// OpDecorate - check if this is LinkageAttributes
+		if (opcode == OpDecorate && word_count >= 3) {
 			uint32_t decoration = *(word + 2);
-			if (decoration == 41) { // LinkageAttributes decoration
+			if (decoration == LinkageAttributesDecoration) {
 				uint32_t target_id = *(word + 1);
 				// We'll check if this is for bpf_main later
 				if (linkage_attr_pos == 0 || target_id == bpf_main_id) {
@@ -68,8 +76,8 @@ std::vector<uint8_t> patch_spirv_add_entry_point(const std::vector<uint8_t>& spi
 			}
 		}
 
-		// OpFunction (54) - check if this is bpf_main
-		if (opcode == 54 && word_count >= 5) {
+		// OpFunction - check if this is bpf_main
+		if (opcode == OpFunction && word_count >= 5) {
 			uint32_t function_result_id = *(word + 2);
 			// We'll verify this is bpf_main by checking OpName later
 			// For now, assume the first OpFunction after OpMemoryModel is bpf_main
@@ -79,7 +87,7 @@ std::vector<uint8_t> patch_spirv_add_entry_point(const std::vector<uint8_t>& spi
 		}
 
 		scan_pos += word_count * 4;
-		if (scan_pos > 1000) break; // Safety check
+		if (scan_pos >= spirv.size()) break; // Safety check: prevent out-of-bounds
 	}
 
 	if (bpf_main_id == 0) {

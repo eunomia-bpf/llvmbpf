@@ -713,6 +713,8 @@ llvm_bpf_jit_context::generate_spirv(bool main_with_arguments,
 				     const std::string &func_name,
 				     const char *target_env)
 {
+	// target_env can specify SPIR-V environment (e.g., "opencl2.0", "vulkan1.2")
+	// Currently passed to LLVM target machine creation for future extensibility
 	static ExitOnError exitOnErr;
 	spin_lock_guard guard(compiling.get());
 	auto targetMachine = createSPIRVTargetMachine(target_env);

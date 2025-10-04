@@ -26,6 +26,8 @@ jobs:
           llvm-20-dev \
           libzstd-dev \
           ninja-build \
+          opencl-headers \
+          ocl-icd-opencl-dev \
           spirv-tools
 
     - name: Configure and build

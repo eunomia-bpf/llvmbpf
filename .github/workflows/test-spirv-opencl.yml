@@ -28,12 +28,13 @@ jobs:
           ninja-build \
           opencl-headers \
           ocl-icd-opencl-dev \
-          spirv-tools
+          spirv-tools \
+          lcov
 
     - name: Configure and build
       run: |
         env LLVM_DIR=/usr/lib/llvm-20/cmake \
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DLLVMBPF_ENABLE_SPIRV=ON -G Ninja
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DLLVMBPF_ENABLE_SPIRV=ON -DBPFTIME_ENABLE_UNIT_TESTING=1 -DBPFTIME_ENABLE_CODE_COVERAGE=1 -G Ninja
         cmake --build build --target all -j$(nproc)
 
     - name: Test JIT compilation (validates eBPF logic)
@@ -73,3 +74,17 @@ jobs:
 
         echo ""
         echo "✅ SPIR-V compilation test passed"
+
+    - name: Upload coverage
+      run: |
+        lcov --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info # filter system-files
+        lcov --list coverage.info # debug info
+
+    - uses: codecov/codecov-action@v4
+      with:
+        fail_ci_if_error: true # optional (default = false)
+        files: ./coverage.info # optional
+        flags: spirv_opencl
+        token: ${{ secrets.CODECOV_TOKEN }} # required
+        verbose: true # optional (default = false)

@@ -166,6 +166,8 @@ static std::vector<char> compile(const std::string &ptx)
 	return elf_binary;
 }
 
+static constexpr int GPU_HELPER_MAX_BUF = 1 << 25;
+
 enum class HelperOperation {
 	MAP_LOOKUP = 1,
 	MAP_UPDATE = 2,
@@ -176,15 +178,15 @@ enum class HelperOperation {
 
 union HelperCallRequest {
 	struct {
-		char key[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
 	} map_lookup;
 	struct {
-		char key[1 << 30];
-		char value[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
+		char value[GPU_HELPER_MAX_BUF];
 		uint64_t flags;
 	} map_update;
 	struct {
-		char key[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
 	} map_delete;
 	struct {
 		char fmt[1000];

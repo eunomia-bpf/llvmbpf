@@ -15,6 +15,9 @@
 #include <vector>
 
 /* clang++-17 -S ./default_trampoline.cu -Wall --cuda-gpu-arch=sm_60 -O2 -L/usr/local/cuda/lib64/ -lcudart*/
+// The old 1<<30 value makes the shared segment too large for Boost IPC.
+static constexpr int GPU_HELPER_MAX_BUF = 1 << 25;
+
 enum class HelperOperation {
 	MAP_LOOKUP = 1,
 	MAP_UPDATE = 2,
@@ -27,15 +30,15 @@ enum class HelperOperation {
 
 union HelperCallRequest {
 	struct {
-		char key[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
 	} map_lookup;
 	struct {
-		char key[1 << 30];
-		char value[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
+		char value[GPU_HELPER_MAX_BUF];
 		uint64_t flags;
 	} map_update;
 	struct {
-		char key[1 << 30];
+		char key[GPU_HELPER_MAX_BUF];
 	} map_delete;
 
 	struct {
@@ -94,6 +97,7 @@ __device__ __forceinline__ uint64_t read_globaltimer()
 
 __constant__ uintptr_t constData;
 __constant__ MapBasicInfo map_info[256];
+__device__ int __bpftime_comm_lock = 0;
 extern "C" __device__ void spin_lock(volatile int *lock)
 {
 	while (atomicCAS((int *)lock, 0, 1) == 1) {
@@ -116,7 +120,7 @@ extern "C" __device__ HelperCallResponse make_helper_call(long map_id,
 	// printf("make_map_call at %d, constdata=%lx\n",
 	//        threadIdx.x + blockIdx.x * blockDim.x, (uintptr_t)g_data);
 	// auto start_time = read_globaltimer();
-	spin_lock(&g_data->occupy_flag);
+			spin_lock(&__bpftime_comm_lock);
 	// 准备要写入的参数值
 	int val = 42; // 这里就写一个固定值，示例用
 	// g_data->req = req;
@@ -145,7 +149,7 @@ extern "C" __device__ HelperCallResponse make_helper_call(long map_id,
 		: "memory");
 	HelperCallResponse resp = g_data->resp;
 
-	spin_unlock(&g_data->occupy_flag);
+			spin_unlock(&__bpftime_comm_lock);
 	// auto end_time = read_globaltimer();
 	// if (req_id < 8) {
 	// 	atomicAdd((unsigned long long *)&g_data->time_sum[req_id],

@@ -23,4 +23,4 @@ dump*.txt
 /out.ptx
 /test.*
 /bpf_program.spv
-/bpf_program.spvasm
+/bpf_program.spvasm__pycache__/

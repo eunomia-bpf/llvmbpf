@@ -437,20 +437,23 @@ uint64_t ffi_print_integer(uint64_t a, uint64_t b, uint64_t _c, uint64_t _d,
 }
 
 /*
-Atomic add test (uses 64-bit atomic instruction)
+Atomic add test (uses 64-bit atomic instruction on 32-bit memory)
+Note: The instruction opcode 0xdb is a 64-bit atomic operation, but it operates
+on 32-bit memory (4 bytes). This tests the alignment fix for atomic operations.
+
 int test_atomic_add() {
-    int counter = 0;
-    __sync_fetch_and_add(&counter, 1);
+    int counter = 0;  // 32-bit integer stored in 4 bytes
+    __sync_fetch_and_add(&counter, 1);  // uses 64-bit atomic instruction
     return counter;
 }
 Bytecode:
 0: mov r1, 0x0
-1: stxw [r10-4], r1
+1: stxw [r10-4], r1           // store 32-bit word
 2: mov r1, 0x1
 3: mov r2, r10
 4: add r2, -4
-5: atomic_add64 [r2], r1  (opcode 0xdb = 64-bit atomic add)
-6: ldxw r0, [r10-4]
+5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add instruction
+6: ldxw r0, [r10-4]           // load 32-bit word
 7: exit
 */
 const unsigned char bpf_atomic_add_64[] =

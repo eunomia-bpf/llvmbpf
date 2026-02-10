@@ -437,23 +437,24 @@ uint64_t ffi_print_integer(uint64_t a, uint64_t b, uint64_t _c, uint64_t _d,
 }
 
 /*
-Atomic add test (uses 64-bit atomic instruction on 32-bit memory)
-Note: The instruction opcode 0xdb is a 64-bit atomic operation, but it operates
-on 32-bit memory (4 bytes). This tests the alignment fix for atomic operations.
+Atomic add test (uses 64-bit atomic instruction on 64-bit memory)
+Note: The instruction opcode 0xdb corresponds to a 64-bit (DW) atomic operation
+operating on 8-byte memory. This test validates correct handling of 64-bit
+atomic operations and alignment.
 
-int test_atomic_add() {
-    int counter = 0;  // 32-bit integer stored in 4 bytes
-    __sync_fetch_and_add(&counter, 1);  // uses 64-bit atomic instruction
+uint64_t test_atomic_add() {
+    uint64_t counter = 0;  // 64-bit integer stored in 8 bytes
+    __sync_fetch_and_add(&counter, 1);  // uses a 64-bit atomic instruction
     return counter;
 }
-Bytecode:
+Bytecode (conceptual):
 0: mov r1, 0x0
-1: stxw [r10-4], r1           // store 32-bit word
+1: stxdw [r10-8], r1           // store 64-bit double word
 2: mov r1, 0x1
 3: mov r2, r10
-4: add r2, -4
-5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add instruction
-6: ldxw r0, [r10-4]           // load 32-bit word
+4: add r2, -8
+5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add on 8-byte memory
+6: ldxdw r0, [r10-8]           // load 64-bit double word
 7: exit
 */
 const unsigned char bpf_atomic_add_64[] =

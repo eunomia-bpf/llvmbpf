@@ -25,3 +25,4 @@ dump*.txt
 /bpf_program.spv
 /bpf_program.spvasm
 __pycache__/
+_codeql_build_dir/

@@ -359,7 +359,7 @@ void emitAtomicBinOp(llvm::IRBuilder<> &builder, llvm::Value **regs,
 			       builder.CreateLoad(builder.getInt64Ty(),
 						  regs[inst.src]),
 			       builder.getInt32Ty()),
-		llvm::MaybeAlign(32), llvm::AtomicOrdering::Monotonic);
+		llvm::MaybeAlign(is64 ? 8 : 4), llvm::AtomicOrdering::Monotonic);
 	if (is_fetch) {
 		builder.CreateStore(oldValue, regs[inst.src]);
 	}

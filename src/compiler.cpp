@@ -1331,7 +1331,7 @@ this conversion.
 						is64 ? builder.getInt64Ty() :
 						       builder.getInt32Ty(),
 						regs[inst.src]),
-					MaybeAlign(0),
+					MaybeAlign(is64 ? 8 : 4),
 					AtomicOrdering::Monotonic,
 					AtomicOrdering::Monotonic);
 				builder.CreateStore(

@@ -22,3 +22,27 @@ TEST_CASE("Test aot compilation for extenal function")
 	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
 	REQUIRE(ret == 4);
 }
+
+TEST_CASE("Test atomic add operation 64-bit")
+{
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code((const void *)bpf_atomic_add_64,
+			     sizeof(bpf_atomic_add_64) - 1) == 0);
+	uint64_t ret = 0;
+	uint64_t mem = 0;
+
+	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+	REQUIRE(ret == 1);  // counter should be 1 after atomic add
+}
+
+TEST_CASE("Test atomic add with fetch 32-bit")
+{
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code((const void *)bpf_atomic_add_fetch_32,
+			     sizeof(bpf_atomic_add_fetch_32) - 1) == 0);
+	uint64_t ret = 0;
+	uint64_t mem = 0;
+
+	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+	REQUIRE(ret == 0);  // should return old value (0) before add
+}

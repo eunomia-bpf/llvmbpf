@@ -361,7 +361,16 @@ void emitAtomicBinOp(llvm::IRBuilder<> &builder, llvm::Value **regs,
 			       builder.getInt32Ty()),
 		llvm::MaybeAlign(is64 ? 8 : 4), llvm::AtomicOrdering::Monotonic);
 	if (is_fetch) {
-		builder.CreateStore(oldValue, regs[inst.src]);
+		if (is64) {
+			builder.CreateStore(oldValue, regs[inst.src]);
+		} else {
+			// For 32-bit atomics, zero-extend the fetched value to 64 bits
+			// before storing into the 64-bit register slot to preserve
+			// eBPF register semantics.
+			auto zextOldValue =
+				builder.CreateZExt(oldValue, builder.getInt64Ty());
+			builder.CreateStore(zextOldValue, regs[inst.src]);
+		}
 	}
 }
 

@@ -447,24 +447,24 @@ uint64_t test_atomic_add() {
     __sync_fetch_and_add(&counter, 1);  // uses a 64-bit atomic instruction
     return counter;
 }
-Bytecode (conceptual):
+Bytecode:
 0: mov r1, 0x0
-1: stxdw [r10-8], r1           // store 64-bit double word
+1: stxdw [r10-8], r1           // store 64-bit double word at 8-byte aligned slot
 2: mov r1, 0x1
 3: mov r2, r10
-4: add r2, -8
-5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add on 8-byte memory
+4: add r2, -8                  // r2 = &counter (64-bit, aligned)
+5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add instruction
 6: ldxdw r0, [r10-8]           // load 64-bit double word
 7: exit
 */
 const unsigned char bpf_atomic_add_64[] =
 	"\xb7\x01\x00\x00\x00\x00\x00\x00"  // mov r1, 0x0
-	"\x63\x1a\xfc\xff\x00\x00\x00\x00"  // stxw [r10-4], r1
+	"\x7b\x1a\xf8\xff\x00\x00\x00\x00"  // stxdw [r10-8], r1
 	"\xb7\x01\x00\x00\x01\x00\x00\x00"  // mov r1, 0x1
 	"\xbf\xa2\x00\x00\x00\x00\x00\x00"  // mov r2, r10
-	"\x07\x02\x00\x00\xfc\xff\xff\xff"  // add r2, -4
+	"\x07\x02\x00\x00\xf8\xff\xff\xff"  // add r2, -8
 	"\xdb\x12\x00\x00\x00\x00\x00\x00"  // atomic_add64 [r2], r1
-	"\x61\xa0\xfc\xff\x00\x00\x00\x00"  // ldxw r0, [r10-4]
+	"\x79\xa0\xf8\xff\x00\x00\x00\x00"  // ldxdw r0, [r10-8]
 	"\x95\x00\x00\x00\x00\x00\x00\x00"; // exit
 
 /*

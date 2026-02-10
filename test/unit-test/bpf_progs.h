@@ -437,7 +437,7 @@ uint64_t ffi_print_integer(uint64_t a, uint64_t b, uint64_t _c, uint64_t _d,
 }
 
 /*
-Atomic add 64-bit test
+Atomic add test (uses 64-bit atomic instruction)
 int test_atomic_add() {
     int counter = 0;
     __sync_fetch_and_add(&counter, 1);
@@ -449,7 +449,7 @@ Bytecode:
 2: mov r1, 0x1
 3: mov r2, r10
 4: add r2, -4
-5: atomic_add [r2], r1
+5: atomic_add64 [r2], r1  (opcode 0xdb = 64-bit atomic add)
 6: ldxw r0, [r10-4]
 7: exit
 */
@@ -459,17 +459,18 @@ const unsigned char bpf_atomic_add_64[] =
 	"\xb7\x01\x00\x00\x01\x00\x00\x00"  // mov r1, 0x1
 	"\xbf\xa2\x00\x00\x00\x00\x00\x00"  // mov r2, r10
 	"\x07\x02\x00\x00\xfc\xff\xff\xff"  // add r2, -4
-	"\xdb\x12\x00\x00\x00\x00\x00\x00"  // atomic_add [r2], r1
+	"\xdb\x12\x00\x00\x00\x00\x00\x00"  // atomic_add64 [r2], r1
 	"\x61\xa0\xfc\xff\x00\x00\x00\x00"  // ldxw r0, [r10-4]
 	"\x95\x00\x00\x00\x00\x00\x00\x00"; // exit
 
 /*
-Atomic add 32-bit test with fetch
+Atomic add 32-bit test with fetch (returns old value)
 int test_atomic_add_fetch() {
     int counter = 0;
     int old = __sync_fetch_and_add(&counter, 5);
     return old;
 }
+Bytecode uses opcode 0xc3 = 32-bit atomic add with fetch (EBPF_ATOMIC_ADD | EBPF_ATOMIC_OP_FETCH)
 */
 const unsigned char bpf_atomic_add_fetch_32[] =
 	"\xb7\x01\x00\x00\x00\x00\x00\x00"  // mov r1, 0x0
@@ -477,7 +478,7 @@ const unsigned char bpf_atomic_add_fetch_32[] =
 	"\xb7\x01\x00\x00\x05\x00\x00\x00"  // mov r1, 0x5
 	"\xbf\xa2\x00\x00\x00\x00\x00\x00"  // mov r2, r10
 	"\x07\x02\x00\x00\xfc\xff\xff\xff"  // add r2, -4
-	"\xc3\x12\x00\x00\x01\x00\x00\x00"  // atomic_add_fetch [r2], r1 (32-bit with fetch)
+	"\xc3\x12\x00\x00\x01\x00\x00\x00"  // atomic_add32_fetch [r2], r1 (32-bit with fetch, returns old value in r1)
 	"\xbf\x10\x00\x00\x00\x00\x00\x00"  // mov r0, r1
 	"\x95\x00\x00\x00\x00\x00\x00\x00"; // exit
 

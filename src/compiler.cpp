@@ -1306,7 +1306,7 @@ this conversion.
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Xchg, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					false);
+					true);
 				break;
 			}
 			case EBPF_ATOMIC_OP_CMPXCHG: {

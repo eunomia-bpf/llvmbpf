@@ -271,21 +271,25 @@ llvm::Value *emitLDXLoadingAddr(llvm::IRBuilder<> &builder, llvm::Value **regs,
 }
 
 void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
-			  const ebpf_inst &inst, llvm::Value *result)
+			  const ebpf_inst &inst, llvm::Value *result,
+			  bool sign_extend)
 {
 	// Extend the loaded value to 64bits, then store it into
 	// the register
-	builder.CreateStore(builder.CreateZExt(result, builder.getInt64Ty()),
-			    regs[inst.dst]);
+	llvm::Value *extended =
+		sign_extend ? builder.CreateSExt(result, builder.getInt64Ty()) :
+			      builder.CreateZExt(result, builder.getInt64Ty());
+	builder.CreateStore(extended, regs[inst.dst]);
 }
 
 void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
-	       const ebpf_inst &inst, llvm::IntegerType *srcTy)
+	       const ebpf_inst &inst, llvm::IntegerType *srcTy,
+	       bool sign_extend)
 {
 	using namespace llvm;
 	Value *addr = emitLDXLoadingAddr(builder, &regs[0], inst);
 	Value *result = builder.CreateLoad(srcTy, addr);
-	emitLDXStoringResult(builder, &regs[0], inst, result);
+	emitLDXStoringResult(builder, &regs[0], inst, result, sign_extend);
 }
 
 llvm::Expected<int> emitCondJmpWithDstAndSrc(

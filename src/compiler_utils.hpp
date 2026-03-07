@@ -92,9 +92,11 @@ localJmpDstAndNextBlk(uint16_t pc, const ebpf_inst &inst,
 llvm::Value *emitLDXLoadingAddr(llvm::IRBuilder<> &builder, llvm::Value **regs,
 				const ebpf_inst &inst);
 void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
-			  const ebpf_inst &inst, llvm::Value *result);
+			  const ebpf_inst &inst, llvm::Value *result,
+			  bool sign_extend = false);
 void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
-	       const ebpf_inst &inst, llvm::IntegerType *srcTy);
+	       const ebpf_inst &inst, llvm::IntegerType *srcTy,
+	       bool sign_extend = false);
 
 llvm::Expected<int> emitCondJmpWithDstAndSrc(
 	llvm::IRBuilder<> &builder, uint16_t pc, const ebpf_inst &inst,

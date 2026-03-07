@@ -64,6 +64,7 @@ const size_t MAX_LOCAL_FUNC_DEPTH = 32;
 
 	Load & store:
 	EBPF_OP_LDXW, EBPF_OP_LDXH, EBPF_OP_LDXB, EBPF_OP_LDXDW,
+	EBPF_OP_LDXSW, EBPF_OP_LDXSH, EBPF_OP_LDXSB,
     EBPF_OP_STW, EBPF_OP_STH, EBPF_OP_STB, EBPF_OP_STDW,
     EBPF_OP_STXW, EBPF_OP_STXH, EBPF_OP_STXB, EBPF_OP_STXDW,
     EBPF_OP_LDDW,
@@ -776,6 +777,21 @@ this conversion.
 		case EBPF_OP_LDXDW: {
 			emitLoadX(builder, &regs[0], inst,
 				  builder.getInt64Ty());
+			break;
+		}
+		case EBPF_OP_LDXSB: {
+			emitLoadX(builder, &regs[0], inst, builder.getInt8Ty(),
+				  true);
+			break;
+		}
+		case EBPF_OP_LDXSH: {
+			emitLoadX(builder, &regs[0], inst,
+				  builder.getInt16Ty(), true);
+			break;
+		}
+		case EBPF_OP_LDXSW: {
+			emitLoadX(builder, &regs[0], inst,
+				  builder.getInt32Ty(), true);
 			break;
 		}
 		// LD

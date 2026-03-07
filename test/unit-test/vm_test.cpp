@@ -223,6 +223,53 @@ TEST_CASE("Test loading and executing incorrect code")
 	}
 }
 
+TEST_CASE("Test sign-extending LDX loads")
+{
+	uint64_t mem = 0;
+
+	SECTION("ldxsb sign extends byte loads")
+	{
+		bpftime::llvmbpf_vm vm;
+		const unsigned char program[] = {
+			0x72, 0x0a, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00,
+			0x91, 0xa0, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+			0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		};
+		uint64_t ret = 0;
+		REQUIRE(vm.load_code(program, sizeof(program)) == 0);
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 0xffffffffffffff80ULL);
+	}
+
+	SECTION("ldxsh sign extends half-word loads")
+	{
+		bpftime::llvmbpf_vm vm;
+		const unsigned char program[] = {
+			0x6a, 0x0a, 0xfe, 0xff, 0x01, 0x80, 0x00, 0x00,
+			0x89, 0xa0, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00,
+			0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		};
+		uint64_t ret = 0;
+		REQUIRE(vm.load_code(program, sizeof(program)) == 0);
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 0xffffffffffff8001ULL);
+	}
+
+	SECTION("ldxsw sign extends word loads")
+	{
+		bpftime::llvmbpf_vm vm;
+		const unsigned char program[] = {
+			0x62, 0x0a, 0xfc, 0xff, 0x01, 0x00, 0x00, 0x80,
+			0x81, 0xa0, 0xfc, 0xff, 0x00, 0x00, 0x00, 0x00,
+			0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		};
+		uint64_t ret = 0;
+		REQUIRE(vm.load_code(program, sizeof(program)) == 0);
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 0xffffffff80000001ULL);
+	}
+}
+
 const unsigned char xdp_counter_bytecode[] = "\x79\x16\x00\x00\x00\x00\x00\x00"
 					     "\x79\x17\x08\x00\x00\x00\x00\x00"
 					     "\xb7\x01\x00\x00\x00\x00\x00\x00"

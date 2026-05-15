@@ -38,7 +38,9 @@ llvm::Value *emitLoadALUDest(const ebpf_inst &inst, llvm::Value **regs,
 	if (((inst.opcode & 0x07) == EBPF_CLS_ALU64) || dstAlways64) {
 		return builder.CreateLoad(builder.getInt64Ty(), regs[inst.dst]);
 	} else {
-		return builder.CreateLoad(builder.getInt32Ty(), regs[inst.dst]);
+		return builder.CreateTrunc(
+			builder.CreateLoad(builder.getInt64Ty(), regs[inst.dst]),
+			builder.getInt32Ty());
 	}
 }
 
@@ -146,11 +148,12 @@ llvm::Value *emitStoreLoadingSrc(const ebpf_inst &inst,
 void emitStoreWritingResult(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
 			    llvm::Value **regs, llvm::Value *result)
 {
-	builder.CreateStore(
+	auto *store = builder.CreateStore(
 		result, builder.CreateGEP(builder.getInt8Ty(),
 					  builder.CreateLoad(builder.getPtrTy(),
 							     regs[inst.dst]),
 					  { builder.getInt64(inst.offset) }));
+	store->setAlignment(llvm::Align(result->getType()->getIntegerBitWidth() / 8));
 }
 
 void emitStore(const ebpf_inst &inst, llvm::IRBuilder<> &builder,
@@ -173,12 +176,16 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 	if ((inst.opcode & 0x07) == 0x06) {
 		// JMP32
 		if (regSrc) {
-			src = builder.CreateLoad(builder.getInt32Ty(),
-						 regs[inst.src]);
+			src = builder.CreateTrunc(
+				builder.CreateLoad(builder.getInt64Ty(),
+						   regs[inst.src]),
+				builder.getInt32Ty());
 		} else {
 			src = builder.getInt32(inst.imm);
 		}
-		dst = builder.CreateLoad(builder.getInt32Ty(), regs[inst.dst]);
+		dst = builder.CreateTrunc(
+			builder.CreateLoad(builder.getInt64Ty(), regs[inst.dst]),
+			builder.getInt32Ty());
 		zero = builder.getInt32(0);
 	} else {
 		// JMP64
@@ -288,7 +295,8 @@ void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
 {
 	using namespace llvm;
 	Value *addr = emitLDXLoadingAddr(builder, &regs[0], inst);
-	Value *result = builder.CreateLoad(srcTy, addr);
+	auto *result = builder.CreateLoad(srcTy, addr);
+	result->setAlignment(llvm::Align(srcTy->getBitWidth() / 8));
 	emitLDXStoringResult(builder, &regs[0], inst, result, sign_extend);
 }
 
@@ -332,21 +340,21 @@ emitExtFuncCall(llvm::IRBuilder<> &builder, const ebpf_inst &inst,
 	if (itr != extFunc.end()) {
 		SPDLOG_DEBUG("Emitting ext func call to {} name {} at pc {}",
 			     inst.imm, funcNameToCall, pc);
-		auto callInst = builder.CreateCall(
-			helperFuncTy, itr->second,
-			{
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[1]),
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[2]),
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[3]),
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[4]),
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[5]),
-
-			});
+		auto *funcTy = itr->second->getFunctionType();
+		if (funcTy->getNumParams() > 5) {
+			return llvm::make_error<llvm::StringError>(
+				"Ext func has too many arguments: " +
+					funcNameToCall,
+				llvm::inconvertibleErrorCode());
+		}
+		std::vector<llvm::Value *> args;
+		args.reserve(funcTy->getNumParams());
+		for (unsigned i = 0; i < funcTy->getNumParams(); i++) {
+			args.push_back(builder.CreateLoad(builder.getInt64Ty(),
+							 regs[i + 1]));
+		}
+		auto callInst =
+			builder.CreateCall(funcTy, itr->second, args);
 
 		// Kernel verifier models bpf_tail_call() as RET_VOID: the helper may
 		// not return, and on the fallthrough path R0 must remain unreadable

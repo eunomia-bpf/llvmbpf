@@ -37,14 +37,17 @@ class llvm_bpf_jit_context {
 	llvmbpf_vm &vm;
 
 	std::unique_ptr<pthread_spinlock_t> compiling;
-	llvm::Expected<llvm::orc::ThreadSafeModule>
 
+public:
+	llvm::Expected<llvm::orc::ThreadSafeModule>
 	generateModule(const std::vector<std::string> &extFuncNames,
 		       const std::vector<std::string> &lddwHelpers,
 		       bool patch_map_val_at_compile_time,
 		       bool main_func_with_arguments = true,
 		       const std::string &func_name = "bpf_main",
 		       bool is_gpu = false);
+
+private:
 	bool inline_array_map_lookup_helpers(llvm::Module &module);
 	std::vector<uint8_t>
 	do_aot_compile(const std::vector<std::string> &extFuncNames,

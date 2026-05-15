@@ -76,10 +76,11 @@ static uint32_t stack_access_size(const ebpf_inst &inst)
 }
 
 static uint32_t compute_kernel_stack_bytes(
-	const std::vector<ebpf_inst> &insts)
+	const std::vector<ebpf_inst> &insts, uint16_t end_pc)
 {
 	uint32_t required = 0;
-	for (const auto &inst : insts) {
+	for (uint16_t pc = 0; pc < end_pc; pc++) {
+		const auto &inst = insts[pc];
 		const auto access_size = stack_access_size(inst);
 		if (access_size == 0 || inst.offset >= 0) {
 			continue;
@@ -129,9 +130,84 @@ static std::string kernel_pseudo_map_value_symbol(int32_t old_fd,
 	       encode_u32_hex(static_cast<uint32_t>(offset));
 }
 
+static std::string kernel_pseudo_map_idx_symbol(int32_t idx)
+{
+	return "__llvmbpf_pseudo_map_idx_" +
+	       encode_u32_hex(static_cast<uint32_t>(idx));
+}
+
+static std::string kernel_pseudo_map_idx_value_symbol(int32_t idx,
+						      int32_t offset)
+{
+	return "__llvmbpf_pseudo_map_idx_value_" +
+	       encode_u32_hex(static_cast<uint32_t>(idx)) + "_off_" +
+	       encode_u32_hex(static_cast<uint32_t>(offset));
+}
+
 static std::string kernel_pseudo_call_symbol(uint32_t target_pc)
 {
 	return "__llvmbpf_pseudo_call_pc_" + encode_u32_hex(target_pc);
+}
+
+static std::string kernel_pseudo_func_symbol(uint32_t target_pc)
+{
+	return "__llvmbpf_pseudo_func_pc_" + encode_u32_hex(target_pc);
+}
+
+static uint32_t helper_arg_count(uint32_t id)
+{
+	switch (id) {
+	case 5:   // bpf_ktime_get_ns
+	case 7:   // bpf_get_prandom_u32
+	case 8:   // bpf_get_smp_processor_id
+	case 14:  // bpf_get_current_pid_tgid
+	case 15:  // bpf_get_current_uid_gid
+	case 35:  // bpf_get_current_task
+	case 80:  // bpf_get_current_cgroup_id
+	case 125: // bpf_ktime_get_boot_ns
+	case 158: // bpf_get_current_task_btf
+		return 0;
+	case 95:  // bpf_sk_fullsock
+	case 174: // bpf_get_attach_cookie
+	case 175: // bpf_task_pt_regs
+		return 1;
+	case 1:  // bpf_map_lookup_elem
+	case 3:  // bpf_map_delete_elem
+	case 16: // bpf_get_current_comm
+	case 37: // bpf_current_task_under_cgroup
+	case 88: // bpf_map_pop_elem
+		return 2;
+	case 4:   // bpf_probe_read
+	case 12:  // bpf_tail_call
+	case 27:  // bpf_get_stackid
+	case 45:  // bpf_probe_read_str
+	case 112: // bpf_probe_read_user
+	case 113: // bpf_probe_read_kernel
+	case 115: // bpf_probe_read_kernel_str
+		return 3;
+	case 87: // bpf_map_push_elem
+		return 3;
+	case 2:  // bpf_map_update_elem
+	case 26: // bpf_skb_load_bytes
+		return 4;
+	case 6:  // bpf_trace_printk
+	case 25: // bpf_perf_event_output
+	case 68: // bpf_skb_load_bytes_relative
+		return 5;
+	default:
+		return 5;
+	}
+}
+
+static uint32_t helper_arg_count_from_symbol(const std::string &name)
+{
+	constexpr char prefix[] = "_bpf_helper_ext_";
+	constexpr size_t prefix_len = sizeof(prefix) - 1;
+	if (name.rfind(prefix, 0) != 0) {
+		return 5;
+	}
+	return helper_arg_count(
+		static_cast<uint32_t>(std::stoul(name.substr(prefix_len))));
 }
 
 static GlobalVariable *get_or_create_external_i8_symbol(Module &module,
@@ -221,15 +297,6 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			"No instructions provided",
 			llvm::inconvertibleErrorCode());
 	}
-	const auto kernel_stack_bytes =
-		kernel_compatible_mode ? compute_kernel_stack_bytes(insts) : 0;
-	if (kernel_compatible_mode && kernel_stack_bytes > EBPF_STACK_SIZE) {
-		return llvm::make_error<llvm::StringError>(
-			"Kernel-compatible lift requires " +
-				std::to_string(kernel_stack_bytes) +
-				" bytes of stack, exceeding the kernel limit",
-			llvm::inconvertibleErrorCode());
-	}
 
 	// Define lddw helper function type
 	FunctionType *lddwHelperWithUint32 =
@@ -265,8 +332,12 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		false);
 
 	for (const auto &name : extFuncNames) {
+		std::vector<Type *> helper_args(helper_arg_count_from_symbol(name),
+						Type::getInt64Ty(*context));
+		auto *funcTy = FunctionType::get(Type::getInt64Ty(*context),
+						 helper_args, false);
 		Function *currFunc = Function::Create(
-			helperFuncTy,
+			funcTy,
 			is_gpu ? Function::LinkageTypes::ExternalLinkage :
 				  Function::ExternalLinkage,
 			name, jitModule.get());
@@ -277,33 +348,49 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	if (kernel_compatible_mode) {
 		for (uint16_t i = 0; i < insts.size(); i++) {
 			const auto &curr = insts[i];
-			if ((curr.opcode != EBPF_OP_CALL &&
-			     curr.opcode != (EBPF_OP_CALL | 0x8)) ||
-			    curr.src != 0x1) {
+			if (!(((curr.opcode == EBPF_OP_CALL ||
+				curr.opcode == (EBPF_OP_CALL | 0x8)) &&
+			       curr.src == 0x1) ||
+			      (curr.opcode == EBPF_OP_LDDW && curr.src == 0x4))) {
 				continue;
 			}
-			const auto dstBlkId =
-				static_cast<int64_t>(i) + 1 + curr.imm;
+			const auto dstBlkId = static_cast<int64_t>(i) + 1 +
+					      static_cast<int64_t>(curr.imm);
 			if (dstBlkId < 0 ||
 			    dstBlkId >= static_cast<int64_t>(insts.size())) {
 				return llvm::make_error<llvm::StringError>(
-					"Kernel-compatible lift found an out-of-range BPF-to-BPF target at pc " +
+					"Kernel-compatible lift found an out-of-range BPF subprogram target at pc " +
 						std::to_string(i),
 					llvm::inconvertibleErrorCode());
 			}
 			const auto target_pc = static_cast<uint16_t>(dstBlkId);
 			codegen_end_pc = std::min(codegen_end_pc, target_pc);
-			auto symbol_name = kernel_pseudo_call_symbol(
-				static_cast<uint32_t>(target_pc));
-			auto *decl = jitModule->getFunction(symbol_name);
-			if (!decl) {
-				decl = Function::Create(
-					helperFuncTy,
-					Function::ExternalLinkage, symbol_name,
-					jitModule.get());
+			if ((curr.opcode == EBPF_OP_CALL ||
+			     curr.opcode == (EBPF_OP_CALL | 0x8)) &&
+			    curr.src == 0x1) {
+				auto symbol_name = kernel_pseudo_call_symbol(
+					static_cast<uint32_t>(target_pc));
+				auto *decl = jitModule->getFunction(symbol_name);
+				if (!decl) {
+					decl = Function::Create(
+						helperFuncTy,
+						Function::ExternalLinkage,
+						symbol_name, jitModule.get());
+				}
+				kernelPseudoCallFunc[target_pc] = decl;
 			}
-			kernelPseudoCallFunc[target_pc] = decl;
 		}
+	}
+	const auto kernel_stack_bytes =
+		kernel_compatible_mode ?
+			compute_kernel_stack_bytes(insts, codegen_end_pc) :
+			0;
+	if (kernel_compatible_mode && kernel_stack_bytes > EBPF_STACK_SIZE) {
+		return llvm::make_error<llvm::StringError>(
+			"Kernel-compatible lift requires " +
+				std::to_string(kernel_stack_bytes) +
+				" bytes of stack, exceeding the kernel limit",
+			llvm::inconvertibleErrorCode());
 	}
 	std::vector<bool> blockBegin(insts.size(), false);
 	// Split the blocks
@@ -1173,11 +1260,32 @@ this conversion.
 					regs[inst.dst]);
 			} else if (inst.src == 4) {
 				if (kernel_compatible_mode) {
-					return llvm::make_error<
-						llvm::StringError>(
-						"Kernel-compatible lift does not support code_addr LDDW pseudo at pc " +
-							std::to_string(raw_pc),
-						llvm::inconvertibleErrorCode());
+					const auto target_pc =
+						static_cast<int64_t>(raw_pc) +
+						1 + static_cast<int64_t>(inst.imm);
+					if (target_pc < 0 ||
+					    target_pc >=
+						    static_cast<int64_t>(
+							    insts.size())) {
+						return llvm::make_error<
+							llvm::StringError>(
+							"Kernel-compatible lift found an out-of-range BPF function pointer target at pc " +
+								std::to_string(
+									raw_pc),
+							llvm::inconvertibleErrorCode());
+					}
+					SPDLOG_DEBUG(
+						"Emit kernel-compatible pseudo func at pc {}, target={}",
+						raw_pc, target_pc);
+					builder.CreateStore(
+						emitKernelPseudoSymbol(
+							builder,
+							kernel_pseudo_func_symbol(
+								static_cast<
+									uint32_t>(
+									target_pc))),
+						regs[inst.dst]);
+					break;
 				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (code_addr) at pc {}, imm1={}",
@@ -1195,11 +1303,16 @@ this conversion.
 					regs[inst.dst]);
 			} else if (inst.src == 5) {
 				if (kernel_compatible_mode) {
-					return llvm::make_error<
-						llvm::StringError>(
-						"Kernel-compatible lift does not support map_by_idx LDDW pseudo at pc " +
-							std::to_string(raw_pc),
-						llvm::inconvertibleErrorCode());
+					SPDLOG_DEBUG(
+						"Emit kernel-compatible pseudo map idx at pc {}, imm={}",
+						raw_pc, inst.imm);
+					builder.CreateStore(
+						emitKernelPseudoSymbol(
+							builder,
+							kernel_pseudo_map_idx_symbol(
+								inst.imm)),
+						regs[inst.dst]);
+					break;
 				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (map_by_idx) at pc {}, imm1={}",
@@ -1221,11 +1334,18 @@ this conversion.
 
 			} else if (inst.src == 6) {
 				if (kernel_compatible_mode) {
-					return llvm::make_error<
-						llvm::StringError>(
-						"Kernel-compatible lift does not support map_by_idx + map_val LDDW pseudo at pc " +
-							std::to_string(raw_pc),
-						llvm::inconvertibleErrorCode());
+					SPDLOG_DEBUG(
+						"Emit kernel-compatible pseudo map idx value at pc {}, imm1={}, imm2={}",
+						raw_pc, inst.imm,
+						nextinst.imm);
+					builder.CreateStore(
+						emitKernelPseudoSymbol(
+							builder,
+							kernel_pseudo_map_idx_value_symbol(
+								inst.imm,
+								nextinst.imm)),
+						regs[inst.dst]);
+					break;
 				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 6 (map_by_idx + map_val) at pc {}, imm1={}, imm2={}",

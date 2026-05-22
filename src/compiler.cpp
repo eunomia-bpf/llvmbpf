@@ -12,6 +12,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/Support/Alignment.h>
 #include <llvm/Support/AtomicOrdering.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/Support/Error.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/IR/BasicBlock.h>
@@ -1811,11 +1812,14 @@ this conversion.
 	// Add br for all blocks
 	for (size_t i = 0; i < allBlocks.size() - 1; i++) {
 		auto &currBlk = allBlocks[i];
-		// NB: use hasTerminator() rather than getTerminator()==nullptr.
-		// Since LLVM 16+, getTerminator() asserts hasTerminator() and
-		// returns back() unconditionally, so in NDEBUG builds it returns
-		// a non-null non-terminator for blocks lacking a terminator.
-		if (!currBlk->hasTerminator()) {
+		// LLVM 16+ changed getTerminator() behavior for unterminated
+		// blocks; older LLVM does not have hasTerminator().
+#if LLVM_VERSION_MAJOR >= 16
+		bool has_terminator = currBlk->hasTerminator();
+#else
+		bool has_terminator = currBlk->getTerminator() != nullptr;
+#endif
+		if (!has_terminator) {
 			builder.SetInsertPoint(allBlocks[i]);
 			builder.CreateBr(allBlocks[i + 1]);
 		}

@@ -483,11 +483,9 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
 		SPDLOG_DEBUG("Initializing llvm");
-		llvm::InitializeAllTargetInfos();
-		llvm::InitializeAllTargets();
-		llvm::InitializeAllTargetMCs();
-		llvm::InitializeAllAsmPrinters();
-		llvm::InitializeAllAsmParsers();
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+		llvm::InitializeNativeTargetAsmParser();
 	}
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);
@@ -549,8 +547,7 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 				       vm.disabled_passes_, vm.log_passes_);
 			auto targetMachine =
 				create_host_target_machine_or_throw(vm);
-			module.setTargetTriple(
-				targetMachine->getTargetTriple());
+			module.setTargetTriple(targetMachine->getTargetTriple());
 			module.setDataLayout(targetMachine->createDataLayout());
 			SmallVector<char, 0> objStream;
 			std::unique_ptr<raw_svector_ostream> BOS =

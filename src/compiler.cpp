@@ -1811,7 +1811,11 @@ this conversion.
 	// Add br for all blocks
 	for (size_t i = 0; i < allBlocks.size() - 1; i++) {
 		auto &currBlk = allBlocks[i];
-		if (currBlk->getTerminator() == nullptr) {
+		// NB: use hasTerminator() rather than getTerminator()==nullptr.
+		// Since LLVM 16+, getTerminator() asserts hasTerminator() and
+		// returns back() unconditionally, so in NDEBUG builds it returns
+		// a non-null non-terminator for blocks lacking a terminator.
+		if (!currBlk->hasTerminator()) {
 			builder.SetInsertPoint(allBlocks[i]);
 			builder.CreateBr(allBlocks[i + 1]);
 		}

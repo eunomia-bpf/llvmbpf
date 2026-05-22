@@ -550,7 +550,7 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 			auto targetMachine =
 				create_host_target_machine_or_throw(vm);
 			module.setTargetTriple(
-				targetMachine->getTargetTriple().str());
+				targetMachine->getTargetTriple());
 			module.setDataLayout(targetMachine->createDataLayout());
 			SmallVector<char, 0> objStream;
 			std::unique_ptr<raw_svector_ostream> BOS =
@@ -860,19 +860,18 @@ static std::unique_ptr<llvm::TargetMachine>
 createNVPTXTargetMachine(const char *target_cpu)
 {
 	std::string error;
+	llvm::Triple triple("nvptx64-nvidia-cuda");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget("nvptx64", error);
+		llvm::TargetRegistry::lookupTarget(triple, error);
 	if (!target) {
 		throw std::runtime_error("Failed to find NVPTX target: " +
 					 error);
 	}
 
-	llvm::Triple triple("nvptx64-nvidia-cuda");
-
 	llvm::TargetOptions options;
 	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple.str(), target_cpu, "",
+		target->createTargetMachine(triple, target_cpu, "",
 					    options, llvm::Reloc::Static));
 	return result;
 }
@@ -952,19 +951,18 @@ static std::unique_ptr<llvm::TargetMachine>
 createSPIRVTargetMachine(const char *target_cpu)
 {
 	std::string error;
+	llvm::Triple triple("spirv64-unknown-unknown");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget("spirv64", error);
+		llvm::TargetRegistry::lookupTarget(triple, error);
 	if (!target) {
 		throw std::runtime_error("Failed to find SPIR-V target: " +
 					 error);
 	}
 
-	llvm::Triple triple("spirv64-unknown-unknown");
-
 	llvm::TargetOptions options;
 	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple.str(), target_cpu, "",
+		target->createTargetMachine(triple, target_cpu, "",
 					    options, llvm::Reloc::Static));
 	return result;
 }

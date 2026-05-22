@@ -1812,13 +1812,8 @@ this conversion.
 	// Add br for all blocks
 	for (size_t i = 0; i < allBlocks.size() - 1; i++) {
 		auto &currBlk = allBlocks[i];
-		// LLVM 16+ changed getTerminator() behavior for unterminated
-		// blocks; older LLVM does not have hasTerminator().
-#if LLVM_VERSION_MAJOR >= 16
-		bool has_terminator = currBlk->hasTerminator();
-#else
-		bool has_terminator = currBlk->getTerminator() != nullptr;
-#endif
+		bool has_terminator =
+			!currBlk->empty() && currBlk->back().isTerminator();
 		if (!has_terminator) {
 			builder.SetInsertPoint(allBlocks[i]);
 			builder.CreateBr(allBlocks[i + 1]);

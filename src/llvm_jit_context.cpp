@@ -185,6 +185,16 @@ using namespace llvm::orc;
 using namespace bpftime;
 using namespace std;
 
+// LLVM 21 migrated TargetRegistry::lookupTarget / Target::createTargetMachine /
+// Module::setTargetTriple from taking a triple std::string to taking an
+// llvm::Triple. Pass the right argument type for whichever LLVM this is built
+// against (e.g. the in-repo LLVM-23 fork vs an LLVM-15 cross sysroot).
+#if LLVM_VERSION_MAJOR >= 21
+#define BPFTIME_TRIPLE_ARG(t) (t)
+#else
+#define BPFTIME_TRIPLE_ARG(t) ((t).str())
+#endif
+
 struct spin_lock_guard {
 	pthread_spinlock_t *spin;
 	spin_lock_guard(pthread_spinlock_t *spin) : spin(spin)
@@ -547,7 +557,7 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 				       vm.disabled_passes_, vm.log_passes_);
 			auto targetMachine =
 				create_host_target_machine_or_throw(vm);
-			module.setTargetTriple(targetMachine->getTargetTriple());
+			module.setTargetTriple(BPFTIME_TRIPLE_ARG(targetMachine->getTargetTriple()));
 			module.setDataLayout(targetMachine->createDataLayout());
 			SmallVector<char, 0> objStream;
 			std::unique_ptr<raw_svector_ostream> BOS =
@@ -859,7 +869,7 @@ createNVPTXTargetMachine(const char *target_cpu)
 	std::string error;
 	llvm::Triple triple("nvptx64-nvidia-cuda");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget(triple, error);
+		llvm::TargetRegistry::lookupTarget(BPFTIME_TRIPLE_ARG(triple), error);
 	if (!target) {
 		throw std::runtime_error("Failed to find NVPTX target: " +
 					 error);
@@ -868,7 +878,7 @@ createNVPTXTargetMachine(const char *target_cpu)
 	llvm::TargetOptions options;
 	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple, target_cpu, "",
+		target->createTargetMachine(BPFTIME_TRIPLE_ARG(triple), target_cpu, "",
 					    options, llvm::Reloc::Static));
 	return result;
 }
@@ -950,7 +960,7 @@ createSPIRVTargetMachine(const char *target_cpu)
 	std::string error;
 	llvm::Triple triple("spirv64-unknown-unknown");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget(triple, error);
+		llvm::TargetRegistry::lookupTarget(BPFTIME_TRIPLE_ARG(triple), error);
 	if (!target) {
 		throw std::runtime_error("Failed to find SPIR-V target: " +
 					 error);
@@ -959,7 +969,7 @@ createSPIRVTargetMachine(const char *target_cpu)
 	llvm::TargetOptions options;
 	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple, target_cpu, "",
+		target->createTargetMachine(BPFTIME_TRIPLE_ARG(triple), target_cpu, "",
 					    options, llvm::Reloc::Static));
 	return result;
 }

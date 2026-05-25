@@ -549,8 +549,11 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 				       vm.disabled_passes_, vm.log_passes_);
 			auto targetMachine =
 				create_host_target_machine_or_throw(vm);
-			module.setTargetTriple(
-				targetMachine->getTargetTriple().str());
+			#if LLVM_VERSION_MAJOR >= 21
+				module.setTargetTriple(targetMachine->getTargetTriple());
+			#else
+				module.setTargetTriple(targetMachine->getTargetTriple().str());
+			#endif
 			module.setDataLayout(targetMachine->createDataLayout());
 			SmallVector<char, 0> objStream;
 			std::unique_ptr<raw_svector_ostream> BOS =

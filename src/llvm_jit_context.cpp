@@ -12,6 +12,7 @@
 #include <string.h>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -245,21 +246,19 @@ static void optimizeModule(llvm::Module &M)
 extern "C" void __aeabi_unwind_cpp_pr1();
 #endif
 
-static int llvm_initialized = 0;
+static std::once_flag llvm_initialized;
 
 llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 {
 	using namespace llvm;
-	int zero = 0;
-	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
-					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+	std::call_once(llvm_initialized, []() {
 		SPDLOG_DEBUG("Initializing llvm");
 		llvm::InitializeAllTargetInfos();
 		llvm::InitializeAllTargets();
 		llvm::InitializeAllTargetMCs();
 		llvm::InitializeAllAsmPrinters();
 		llvm::InitializeAllAsmParsers();
-	}
+	});
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);
 }

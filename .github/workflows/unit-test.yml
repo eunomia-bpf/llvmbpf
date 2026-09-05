@@ -7,14 +7,14 @@ on:
     branches: "main"
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
 
     - name: Install Ninja and lcov (Ubuntu)
-      run: sudo apt install -y ninja-build lcov llvm-15-dev libzstd-dev
+      run: sudo apt-get update && sudo apt-get install -y ninja-build lcov llvm-15-dev libzstd-dev
     
     - name: build
       run:

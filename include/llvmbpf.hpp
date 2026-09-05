@@ -3,8 +3,10 @@
 
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 #include <ebpf_inst.h>
+#include <cstdint>
 #include <string>
 
 #ifndef MAX_EXT_FUNCS
@@ -17,6 +19,20 @@ namespace bpftime
 struct external_function {
 	std::string name;
 	void *fn;
+};
+
+struct compiled_code {
+	const uint8_t *data = nullptr;
+	size_t size = 0;
+};
+
+struct array_map_descriptor {
+	uint64_t map_handle = 0;
+	uint64_t value_base = 0;
+	uint32_t key_size = sizeof(uint32_t);
+	uint32_t value_size = 0;
+	uint32_t value_stride = 0;
+	uint32_t max_entries = 0;
 };
 
 class llvm_bpf_jit_context;
@@ -35,6 +51,10 @@ class llvmbpf_vm {
 	// return 0 on success
 	int register_external_function(size_t index, const std::string &name,
 				       void *fn) noexcept;
+
+	// Register an array-map description that the JIT may use to inline
+	// bpf_map_lookup_elem helper calls for constant map handles.
+	int register_array_map(const array_map_descriptor &map) noexcept;
 
 	// load the eBPF bytecode into the vm
 	// The eBPF bytecode now can be JIT/AOT compiled
@@ -70,6 +90,21 @@ class llvmbpf_vm {
 	// return the JITed function if success
 	std::optional<precompiled_ebpf_function> compile() noexcept;
 
+	// Configure the LLVM optimization level used for JIT/AOT compilation.
+	int set_optimization_level(int level) noexcept;
+	int set_target_cpu(const std::string &cpu) noexcept;
+	int set_target_features(const std::string &features) noexcept;
+	int set_disabled_passes(
+		const std::vector<std::string> &pass_names) noexcept;
+	int set_log_passes(bool enabled) noexcept;
+	void set_kernel_compatible_mode(bool enabled) noexcept;
+	const std::string &get_target_cpu() const noexcept;
+	const std::string &get_target_features() const noexcept;
+	const std::vector<std::string> &get_disabled_passes() const noexcept;
+
+	// Return the compiled native code pointer and size after compile()
+	std::optional<compiled_code> get_compiled_code() noexcept;
+
 	// See the spec for details.
 	// If the code involve array map access, the map_val function
 	// needs to be provided.
@@ -96,12 +131,19 @@ class llvmbpf_vm {
 	std::vector<ebpf_inst> instructions;
 
 	std::vector<std::optional<external_function> > ext_funcs;
+	std::unordered_map<uint64_t, array_map_descriptor> array_maps;
 
 	std::unique_ptr<llvm_bpf_jit_context> jit_ctx;
 
 	friend class llvm_bpf_jit_context;
 
 	std::string error_msg;
+	int optimization_level = 3;
+	std::string target_cpu_;
+	std::string target_features_;
+	std::vector<std::string> disabled_passes_;
+	bool log_passes_ = false;
+	bool kernel_compatible_mode_ = false;
 
 	std::optional<precompiled_ebpf_function> jitted_function = std::nullopt;
 };

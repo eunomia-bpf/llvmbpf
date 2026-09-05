@@ -51,6 +51,7 @@
 #include <typeinfo>
 #include <llvm-c/ExecutionEngine.h>
 #include "llvm/LTO/LTOBackend.h"
+#include "llvm/IR/PassInstrumentation.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/ModuleSummaryAnalysis.h"
@@ -160,6 +161,7 @@
 #endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Support/Alignment.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/ExecutionEngine/JITSymbol.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -201,11 +203,34 @@ struct spin_lock_guard {
 	}
 };
 
-static void optimizeModule(llvm::Module &M)
+static void optimizeModule(llvm::Module &M, int opt_level,
+			   const std::vector<std::string> &disabled_passes,
+			   bool log_passes)
 {
 	// std::cout << "LLVM_VERSION_MAJOR: " << LLVM_VERSION_MAJOR <<
 	// std::endl;
 #if LLVM_VERSION_MAJOR >= 17
+	PassInstrumentationCallbacks PIC;
+	if (!disabled_passes.empty()) {
+		PIC.registerShouldRunOptionalPassCallback(
+			[&disabled_passes](StringRef pass_name, Any) {
+				for (const auto &disabled : disabled_passes) {
+					if (pass_name.contains(
+						    StringRef(disabled))) {
+						return false;
+					}
+				}
+				return true;
+			});
+	}
+	if (log_passes) {
+		PIC.registerBeforeNonSkippedPassCallback(
+			[](StringRef pass_name, Any) {
+				llvm::errs() << "[llvmbpf pass] "
+					     << pass_name << "\n";
+			});
+	}
+
 	// =====================
 	// Create the analysis managers.
 	// These must be declared in this order so that they are destroyed in
@@ -219,7 +244,7 @@ static void optimizeModule(llvm::Module &M)
 	// Take a look at the PassBuilder constructor parameters for more
 	// customization, e.g. specifying a TargetMachine or various debugging
 	// options.
-	PassBuilder PB;
+	PassBuilder PB(nullptr, PipelineTuningOptions(), std::nullopt, &PIC);
 
 	// Register all the basic analyses with the managers.
 	PB.registerModuleAnalyses(MAM);
@@ -228,23 +253,227 @@ static void optimizeModule(llvm::Module &M)
 	PB.registerLoopAnalyses(LAM);
 	PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-	// Create the pass manager.
-	// This one corresponds to a typical -O2 optimization pipeline.
+	llvm::OptimizationLevel optimization_level = llvm::OptimizationLevel::O3;
+	switch (opt_level) {
+	case 0:
+		optimization_level = llvm::OptimizationLevel::O0;
+		break;
+	case 1:
+		optimization_level = llvm::OptimizationLevel::O1;
+		break;
+	case 2:
+		optimization_level = llvm::OptimizationLevel::O2;
+		break;
+	case 3:
+	default:
+		optimization_level = llvm::OptimizationLevel::O3;
+		break;
+	}
+
 	ModulePassManager MPM =
-		PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+		PB.buildPerModuleDefaultPipeline(optimization_level);
 
 	// Optimize the IR!
 	MPM.run(M, MAM);
 	// =====================================
 #else
+	(void)disabled_passes;
+	(void)log_passes;
 	llvm::legacy::PassManager PM;
 
 	llvm::PassManagerBuilder PMB;
-	PMB.OptLevel = 3;
+	PMB.OptLevel = opt_level;
 	PMB.populateModulePassManager(PM);
 
 	PM.run(M);
 #endif
+}
+
+namespace {
+
+bool is_power_of_two_u32(uint32_t value)
+{
+	return value != 0 && (value & (value - 1)) == 0;
+}
+
+unsigned int ilog2_u32(uint32_t value)
+{
+	unsigned int shift = 0;
+	while (value > 1) {
+		value >>= 1;
+		shift++;
+	}
+	return shift;
+}
+
+void apply_target_feature_overrides(llvm::SubtargetFeatures &features,
+				       const std::string &feature_overrides)
+{
+	size_t start = 0;
+	while (start <= feature_overrides.size()) {
+		const size_t comma = feature_overrides.find(',', start);
+		std::string token = feature_overrides.substr(
+			start,
+			comma == std::string::npos ? std::string::npos
+						   : comma - start);
+		const auto first = token.find_first_not_of(" \t");
+		if (first != std::string::npos) {
+			const auto last = token.find_last_not_of(" \t");
+			token = token.substr(first, last - first + 1);
+		} else {
+			token.clear();
+		}
+
+		if (!token.empty()) {
+			bool enable = true;
+			if (token.front() == '+' || token.front() == '-') {
+				enable = token.front() != '-';
+				token.erase(token.begin());
+			}
+			if (!token.empty()) {
+				features.AddFeature(token, enable);
+			}
+		}
+
+		if (comma == std::string::npos) {
+			break;
+		}
+		start = comma + 1;
+	}
+}
+
+llvm::Expected<llvm::orc::JITTargetMachineBuilder>
+create_host_jit_target_machine_builder(const llvmbpf_vm &vm)
+{
+	auto jtmb = llvm::orc::JITTargetMachineBuilder::detectHost();
+	if (!jtmb) {
+		return jtmb.takeError();
+	}
+
+	if (!vm.get_target_cpu().empty()) {
+		jtmb->setCPU(vm.get_target_cpu());
+	}
+	if (!vm.get_target_features().empty()) {
+		apply_target_feature_overrides(
+			jtmb->getFeatures(), vm.get_target_features());
+	}
+	return std::move(*jtmb);
+}
+
+std::unique_ptr<llvm::TargetMachine>
+create_host_target_machine_or_throw(const llvmbpf_vm &vm)
+{
+	auto jtmb = create_host_jit_target_machine_builder(vm);
+	if (!jtmb) {
+		throw std::runtime_error(llvm::toString(jtmb.takeError()));
+	}
+
+	auto target_machine = jtmb->createTargetMachine();
+	if (!target_machine) {
+		throw std::runtime_error(llvm::toString(target_machine.takeError()));
+	}
+	return std::move(*target_machine);
+}
+
+} // namespace
+
+bool llvm_bpf_jit_context::inline_array_map_lookup_helpers(llvm::Module &module)
+{
+	if (vm.array_maps.empty()) {
+		return false;
+	}
+
+	auto *helperFunc = module.getFunction(ext_func_sym(1));
+	if (!helperFunc) {
+		return false;
+	}
+
+	std::vector<llvm::CallInst *> callSites;
+	for (auto &function : module) {
+		for (auto &block : function) {
+			for (auto &inst : block) {
+				auto *call = llvm::dyn_cast<llvm::CallInst>(&inst);
+				if (!call ||
+				    call->getCalledFunction() != helperFunc) {
+					continue;
+				}
+				callSites.push_back(call);
+			}
+		}
+	}
+
+	bool changed = false;
+	for (auto *call : callSites) {
+		auto *mapHandle =
+			llvm::dyn_cast<llvm::ConstantInt>(call->getArgOperand(0));
+		if (!mapHandle) {
+			continue;
+		}
+
+		const auto mapHandleValue = mapHandle->getZExtValue();
+		auto mapIter = vm.array_maps.find(mapHandleValue);
+		if (mapIter == vm.array_maps.end()) {
+			continue;
+		}
+
+		const auto &map = mapIter->second;
+		if (map.key_size != sizeof(uint32_t) || map.max_entries == 0) {
+			continue;
+		}
+		const uint32_t stride =
+			map.value_stride != 0 ? map.value_stride : map.value_size;
+		if (stride == 0) {
+			continue;
+		}
+
+		uint64_t valueBase = map.value_base;
+		if (valueBase == 0 && vm.map_val) {
+			valueBase = vm.map_val(map.map_handle);
+		}
+		if (valueBase == 0) {
+			continue;
+		}
+
+		llvm::IRBuilder<> builder(call);
+		auto *keyPtr = builder.CreateIntToPtr(
+			call->getArgOperand(1),
+			llvm::PointerType::getUnqual(builder.getInt32Ty()),
+			"array_lookup.key_ptr");
+		auto *index = builder.CreateLoad(builder.getInt32Ty(), keyPtr,
+						 "array_lookup.index");
+		index->setAlignment(llvm::Align(4));
+		auto *inRange = builder.CreateICmpULT(
+			index, builder.getInt32(map.max_entries),
+			"array_lookup.in_range");
+		llvm::Value *offset = builder.CreateZExt(
+			index, builder.getInt64Ty(), "array_lookup.index64");
+		if (is_power_of_two_u32(stride)) {
+			const auto shift = ilog2_u32(stride);
+			if (shift != 0) {
+				offset = builder.CreateShl(
+					offset, builder.getInt64(shift),
+					"array_lookup.offset");
+			}
+		} else {
+			offset = builder.CreateMul(
+				offset, builder.getInt64(stride),
+				"array_lookup.offset");
+		}
+		auto *address = builder.CreateAdd(
+			builder.getInt64(valueBase), offset, "array_lookup.addr");
+		auto *result = builder.CreateSelect(
+			inRange, address, builder.getInt64(0),
+			"array_lookup.result");
+
+		call->replaceAllUsesWith(result);
+		call->eraseFromParent();
+		changed = true;
+	}
+
+	if (changed) {
+		SPDLOG_DEBUG("Inlined array map lookup helper calls");
+	}
+	return changed;
 }
 
 #if defined(__arm__) || defined(_M_ARM)
@@ -289,7 +518,14 @@ llvm::Error llvm_bpf_jit_context::do_jit_compile()
 	// If successful, get the module
 	auto bpfModule = std::move(*bpfModuleOrErr);
 	// Optimize the module
-	bpfModule.withModuleDo([](auto &M) { optimizeModule(M); });
+	bpfModule.withModuleDo([&](auto &M) {
+		optimizeModule(M, vm.optimization_level, vm.disabled_passes_,
+			       vm.log_passes_);
+		if (inline_array_map_lookup_helpers(M)) {
+			optimizeModule(M, vm.optimization_level,
+				       vm.disabled_passes_, vm.log_passes_);
+		}
+	});
 	// Handle the error from addIRModule
 	if (auto err = jit->addIRModule(std::move(bpfModule))) {
 		return err;
@@ -310,33 +546,20 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 	SPDLOG_DEBUG("AOT: start");
 	if (auto module = generateModule(extFuncNames, lddwHelpers, false);
 	    module) {
-		auto defaultTargetTriple = llvm::sys::getDefaultTargetTriple();
-		SPDLOG_DEBUG("AOT: target triple: {}", defaultTargetTriple);
 		return module->withModuleDo([&](auto &module)
 						    -> std::vector<uint8_t> {
 			if (print_ir) {
 				module.print(llvm::outs(), nullptr);
 			}
-			optimizeModule(module);
-			module.setTargetTriple(defaultTargetTriple);
-			std::string error;
-			auto target = TargetRegistry::lookupTarget(
-				defaultTargetTriple, error);
-			if (!target) {
-				SPDLOG_ERROR(
-					"AOT: Failed to get local target: {}",
-					error);
-				throw std::runtime_error(
-					"Unable to get local target");
-			}
-			auto targetMachine = target->createTargetMachine(
-				defaultTargetTriple, "generic", "",
-				TargetOptions(), Reloc::PIC_);
-			if (!targetMachine) {
-				SPDLOG_ERROR("Unable to create target machine");
-				throw std::runtime_error(
-					"Unable to create target machine");
-			}
+			optimizeModule(module, vm.optimization_level,
+				       vm.disabled_passes_, vm.log_passes_);
+			auto targetMachine =
+				create_host_target_machine_or_throw(vm);
+			#if LLVM_VERSION_MAJOR >= 21
+				module.setTargetTriple(targetMachine->getTargetTriple());
+			#else
+				module.setTargetTriple(targetMachine->getTargetTriple().str());
+			#endif
 			module.setDataLayout(targetMachine->createDataLayout());
 			SmallVector<char, 0> objStream;
 			std::unique_ptr<raw_svector_ostream> BOS =
@@ -407,7 +630,9 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(bool print_ir)
 		}
 	};
 	// Only map_val will have a chance to be called at runtime
-	tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
+	if (!vm.kernel_compatible_mode_) {
+		tryDefineLddwHelper(LDDW_HELPER_MAP_VAL, (void *)vm.map_val);
+	}
 	// These symbols won't be used at runtime
 	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_FD, (void *)vm.map_by_fd);
 	// tryDefineLddwHelper(LDDW_HELPER_MAP_BY_IDX, (void *)vm.map_by_idx);
@@ -499,7 +724,15 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 		}
 	}
 #endif
-	auto jit_err = LLJITBuilder().create();
+	auto jtmb = create_host_jit_target_machine_builder(vm);
+	if (!jtmb) {
+		exitOnErr(jtmb.takeError());
+		return std::make_tuple(nullptr, std::vector<std::string>{},
+				       std::vector<std::string>{});
+	}
+	LLJITBuilder jit_builder;
+	jit_builder.setJITTargetMachineBuilder(std::move(*jtmb));
+	auto jit_err = jit_builder.create();
 	if (!jit_err) {
 		exitOnErr(jit_err.takeError());
 		return std::make_tuple(nullptr, std::vector<std::string>{},
@@ -698,7 +931,8 @@ llvm_bpf_jit_context::generate_ptx(bool main_with_arguments,
 	// Optimize the module
 	return bpfModule.withModuleDo([&](auto &M) {
 		M.setDataLayout(targetMachine->createDataLayout());
-		optimizeModule(M);
+		optimizeModule(M, vm.optimization_level, vm.disabled_passes_,
+			       vm.log_passes_);
 
 		llvm::legacy::PassManager passManager;
 #if LLVM_VERSION_MAJOR > 17
@@ -794,7 +1028,8 @@ llvm_bpf_jit_context::generate_spirv(bool main_with_arguments,
 		M.setDataLayout(targetMachine->createDataLayout());
 
 		// Run optimizations to clean up unreachable blocks and simplify code
-		optimizeModule(M);
+		optimizeModule(M, vm.optimization_level, vm.disabled_passes_,
+			       vm.log_passes_);
 
 		llvm::legacy::PassManager passManager;
 #if LLVM_VERSION_MAJOR > 17

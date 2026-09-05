@@ -436,4 +436,54 @@ uint64_t ffi_print_integer(uint64_t a, uint64_t b, uint64_t _c, uint64_t _d,
 	return 0;
 }
 
+/*
+Atomic add test (uses 64-bit atomic instruction on 64-bit memory)
+Note: The instruction opcode 0xdb corresponds to a 64-bit (DW) atomic operation
+operating on 8-byte memory. This test validates correct handling of 64-bit
+atomic operations and alignment.
+
+uint64_t test_atomic_add() {
+    uint64_t counter = 0;  // 64-bit integer stored in 8 bytes
+    __sync_fetch_and_add(&counter, 1);  // uses a 64-bit atomic instruction
+    return counter;
+}
+Bytecode:
+0: mov r1, 0x0
+1: stxdw [r10-8], r1           // store 64-bit double word at 8-byte aligned slot
+2: mov r1, 0x1
+3: mov r2, r10
+4: add r2, -8                  // r2 = &counter (64-bit, aligned)
+5: atomic_add64 [r2], r1       // opcode 0xdb = 64-bit atomic add instruction
+6: ldxdw r0, [r10-8]           // load 64-bit double word
+7: exit
+*/
+const unsigned char bpf_atomic_add_64[] =
+	"\xb7\x01\x00\x00\x00\x00\x00\x00"  // mov r1, 0x0
+	"\x7b\x1a\xf8\xff\x00\x00\x00\x00"  // stxdw [r10-8], r1
+	"\xb7\x01\x00\x00\x01\x00\x00\x00"  // mov r1, 0x1
+	"\xbf\xa2\x00\x00\x00\x00\x00\x00"  // mov r2, r10
+	"\x07\x02\x00\x00\xf8\xff\xff\xff"  // add r2, -8
+	"\xdb\x12\x00\x00\x00\x00\x00\x00"  // atomic_add64 [r2], r1
+	"\x79\xa0\xf8\xff\x00\x00\x00\x00"  // ldxdw r0, [r10-8]
+	"\x95\x00\x00\x00\x00\x00\x00\x00"; // exit
+
+/*
+Atomic add 32-bit test with fetch (returns old value)
+int test_atomic_add_fetch() {
+    int counter = 0;
+    int old = __sync_fetch_and_add(&counter, 5);
+    return old;
+}
+Bytecode uses opcode 0xc3 = 32-bit atomic add with fetch (EBPF_ATOMIC_ADD | EBPF_ATOMIC_OP_FETCH)
+*/
+const unsigned char bpf_atomic_add_fetch_32[] =
+	"\xb7\x01\x00\x00\x00\x00\x00\x00"  // mov r1, 0x0
+	"\x63\x1a\xfc\xff\x00\x00\x00\x00"  // stxw [r10-4], r1
+	"\xb7\x01\x00\x00\x05\x00\x00\x00"  // mov r1, 0x5
+	"\xbf\xa2\x00\x00\x00\x00\x00\x00"  // mov r2, r10
+	"\x07\x02\x00\x00\xfc\xff\xff\xff"  // add r2, -4
+	"\xc3\x12\x00\x00\x01\x00\x00\x00"  // atomic_add32_fetch [r2], r1 (32-bit with fetch, returns old value in r1)
+	"\xbf\x10\x00\x00\x00\x00\x00\x00"  // mov r0, r1
+	"\x95\x00\x00\x00\x00\x00\x00\x00"; // exit
+
 #endif

@@ -84,6 +84,7 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 	std::unique_ptr<bpf_object, decltype(&bpf_object__close)> elf(
 		obj, bpf_object__close);
 	bpf_program *prog;
+	bool had_failure = false;
 	for ((prog) = bpf_object__next_program((elf.get()), __null);
 	     (prog) != __null;
 	     (prog) = bpf_object__next_program((elf.get()), (prog))) {
@@ -98,7 +99,8 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 			SPDLOG_ERROR(
 				"Unable to load instructions of program {}: {}",
 				name, vm.get_error_message());
-			return 1;
+			had_failure = true;
+			continue;
 		}
 		// add 1000 pesudo helpers so it can be used with helpers
 		for (int i = 0; i < 1000; i++) {
@@ -109,16 +111,29 @@ static int build_ebpf_program(const std::string &ebpf_elf,
 		if (!result) {
 			SPDLOG_ERROR("Failed to compile program {}: {}", name,
 				     vm.get_error_message());
-			return 1;
+			had_failure = true;
+			continue;
 		}
 		auto out_path = output / (std::string(name) + ".o");
 		std::ofstream ofs(out_path, std::ios::binary);
+		if (!ofs.is_open()) {
+			SPDLOG_ERROR("Failed to open output file for program {}: {}",
+				     name, out_path.string());
+			had_failure = true;
+			continue;
+		}
 		ofs.write((const char *)result->data(), result->size());
+		if (!ofs.good()) {
+			SPDLOG_ERROR("Failed to write output file for program {}: {}",
+				     name, out_path.string());
+			had_failure = true;
+			continue;
+		}
 		if (!emit_llvm)
 			SPDLOG_INFO("Program {} written to {}", name,
 				    out_path.c_str());
 	}
-	return 0;
+	return had_failure ? 1 : 0;
 }
 
 using bpf_func = uint64_t (*)(const void *, uint64_t);

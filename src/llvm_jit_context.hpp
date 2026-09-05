@@ -45,6 +45,7 @@ class llvm_bpf_jit_context {
 		       bool main_func_with_arguments = true,
 		       const std::string &func_name = "bpf_main",
 		       bool is_gpu = false);
+	bool inline_array_map_lookup_helpers(llvm::Module &module);
 	std::vector<uint8_t>
 	do_aot_compile(const std::vector<std::string> &extFuncNames,
 		       const std::vector<std::string> &lddwHelpers,

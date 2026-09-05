@@ -92,9 +92,11 @@ localJmpDstAndNextBlk(uint16_t pc, const ebpf_inst &inst,
 llvm::Value *emitLDXLoadingAddr(llvm::IRBuilder<> &builder, llvm::Value **regs,
 				const ebpf_inst &inst);
 void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
-			  const ebpf_inst &inst, llvm::Value *result);
+			  const ebpf_inst &inst, llvm::Value *result,
+			  bool sign_extend = false);
 void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
-	       const ebpf_inst &inst, llvm::IntegerType *srcTy);
+	       const ebpf_inst &inst, llvm::IntegerType *srcTy,
+	       bool sign_extend = false);
 
 llvm::Expected<int> emitCondJmpWithDstAndSrc(
 	llvm::IRBuilder<> &builder, uint16_t pc, const ebpf_inst &inst,
@@ -104,9 +106,11 @@ llvm::Expected<int> emitCondJmpWithDstAndSrc(
 
 llvm::Expected<int>
 emitExtFuncCall(llvm::IRBuilder<> &builder, const ebpf_inst &inst,
-		const std::map<std::string, llvm::Function *> &extFunc,
+		std::map<std::string, llvm::Function *> &extFunc,
 		llvm::Value **regs, llvm::FunctionType *helperFuncTy,
-		uint16_t pc, llvm::BasicBlock *exitBlk);
+		uint16_t pc, llvm::BasicBlock *exitBlk,
+		bool allow_implicit_external = false,
+		bool kernel_compatible_mode = false);
 void emitAtomicBinOp(llvm::IRBuilder<> &builder, llvm::Value **regs,
 		     llvm::AtomicRMWInst::BinOp op, const ebpf_inst &inst,
 		     bool is64, bool is_fetch);

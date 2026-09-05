@@ -152,6 +152,13 @@ endif()
 
 message(STATUS "LLVM_LIBS=${LLVM_LIBS}")
 
+# Match LLVM's RTTI setting to avoid unresolved typeinfo symbols when
+# linking against static LLVM builds compiled with -fno-rtti.
+if(DEFINED LLVM_ENABLE_RTTI AND NOT LLVM_ENABLE_RTTI)
+    message(STATUS "LLVM was built without RTTI; compiling llvmbpf_vm with -fno-rtti")
+    target_compile_options(llvmbpf_vm PRIVATE -fno-rtti)
+endif()
+
 target_link_libraries(llvmbpf_vm PRIVATE ${LLVM_LIBS} PRIVATE spdlog::spdlog)
 target_include_directories(llvmbpf_vm
     PRIVATE ${LLVM_INCLUDE_DIRS} ${SPDLOG_INCLUDE} ${Boost_INCLUDE} ../include include # LLVM jit also used these headers

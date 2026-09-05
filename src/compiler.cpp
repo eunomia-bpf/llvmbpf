@@ -23,7 +23,10 @@
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
+#include <algorithm>
+#include <iomanip>
 #include <map>
+#include <sstream>
 #include <vector>
 #include <endian.h>
 #include "compiler_utils.hpp"
@@ -37,6 +40,119 @@ const int STACK_SIZE = (EBPF_STACK_SIZE + 7) / 8;
 const int CALL_STACK_SIZE = 64;
 
 const size_t MAX_LOCAL_FUNC_DEPTH = 32;
+
+static uint32_t align_up_to_8(uint32_t value)
+{
+	return value == 0 ? 0 : ((value + 7) / 8) * 8;
+}
+
+static uint32_t stack_access_size(const ebpf_inst &inst)
+{
+	switch (inst.opcode) {
+	case EBPF_OP_STB:
+	case EBPF_OP_STXB:
+	case EBPF_OP_LDXB:
+	case EBPF_OP_LDXSB:
+		return 1;
+	case EBPF_OP_STH:
+	case EBPF_OP_STXH:
+	case EBPF_OP_LDXH:
+	case EBPF_OP_LDXSH:
+		return 2;
+	case EBPF_OP_STW:
+	case EBPF_OP_STXW:
+	case EBPF_OP_LDXW:
+	case EBPF_OP_LDXSW:
+	case EBPF_ATOMIC_OPCODE_32:
+		return 4;
+	case EBPF_OP_STDW:
+	case EBPF_OP_STXDW:
+	case EBPF_OP_LDXDW:
+	case EBPF_ATOMIC_OPCODE_64:
+		return 8;
+	default:
+		return 0;
+	}
+}
+
+static uint32_t compute_kernel_stack_bytes(
+	const std::vector<ebpf_inst> &insts)
+{
+	uint32_t required = 0;
+	for (const auto &inst : insts) {
+		const auto access_size = stack_access_size(inst);
+		if (access_size == 0 || inst.offset >= 0) {
+			continue;
+		}
+		const bool is_store_or_atomic =
+			inst.opcode == EBPF_OP_STB ||
+			inst.opcode == EBPF_OP_STXB ||
+			inst.opcode == EBPF_OP_STH ||
+			inst.opcode == EBPF_OP_STXH ||
+			inst.opcode == EBPF_OP_STW ||
+			inst.opcode == EBPF_OP_STXW ||
+			inst.opcode == EBPF_OP_STDW ||
+			inst.opcode == EBPF_OP_STXDW ||
+			inst.opcode == EBPF_ATOMIC_OPCODE_32 ||
+			inst.opcode == EBPF_ATOMIC_OPCODE_64;
+		const bool base_is_r10 =
+			is_store_or_atomic ? inst.dst == 10 : inst.src == 10;
+		if (!base_is_r10) {
+			continue;
+		}
+		required = std::max<uint32_t>(
+			required,
+			static_cast<uint32_t>(-inst.offset) + access_size - 1);
+	}
+	return std::max<uint32_t>(1, align_up_to_8(required));
+}
+
+static std::string encode_u32_hex(uint32_t bits)
+{
+	std::ostringstream os;
+	os << std::hex << std::nouppercase << std::setfill('0')
+	   << std::setw(8) << bits;
+	return os.str();
+}
+
+static std::string kernel_pseudo_map_fd_symbol(int32_t old_fd)
+{
+	return "__llvmbpf_pseudo_map_fd_" +
+	       encode_u32_hex(static_cast<uint32_t>(old_fd));
+}
+
+static std::string kernel_pseudo_map_value_symbol(int32_t old_fd,
+						  int32_t offset)
+{
+	return "__llvmbpf_pseudo_map_value_fd_" +
+	       encode_u32_hex(static_cast<uint32_t>(old_fd)) + "_off_" +
+	       encode_u32_hex(static_cast<uint32_t>(offset));
+}
+
+static std::string kernel_pseudo_call_symbol(uint32_t target_pc)
+{
+	return "__llvmbpf_pseudo_call_pc_" + encode_u32_hex(target_pc);
+}
+
+static GlobalVariable *get_or_create_external_i8_symbol(Module &module,
+							const std::string &name)
+{
+	if (auto *existing = module.getNamedGlobal(name)) {
+		return existing;
+	}
+	return new GlobalVariable(module, Type::getInt8Ty(module.getContext()),
+				  false, GlobalValue::ExternalLinkage, nullptr,
+				  name);
+}
+
+static Value *emitKernelPseudoSymbol(IRBuilder<> &builder,
+				     const std::string &name)
+{
+	auto *module = builder.GetInsertBlock()->getModule();
+	assert(module != nullptr);
+	auto *symbol = get_or_create_external_i8_symbol(*module, name);
+	return builder.CreatePtrToInt(symbol, builder.getInt64Ty());
+}
 
 /*
     How should we compile bpf instructions into a LLVM module?
@@ -64,6 +180,7 @@ const size_t MAX_LOCAL_FUNC_DEPTH = 32;
 
 	Load & store:
 	EBPF_OP_LDXW, EBPF_OP_LDXH, EBPF_OP_LDXB, EBPF_OP_LDXDW,
+	EBPF_OP_LDXSW, EBPF_OP_LDXSH, EBPF_OP_LDXSB,
     EBPF_OP_STW, EBPF_OP_STH, EBPF_OP_STB, EBPF_OP_STDW,
     EBPF_OP_STXW, EBPF_OP_STXH, EBPF_OP_STXB, EBPF_OP_STXDW,
     EBPF_OP_LDDW,
@@ -91,16 +208,26 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	bool patch_map_val_at_compile_time, bool main_func_with_arguments,
 	const std::string &func_name, bool is_gpu)
 {
+	const bool kernel_compatible_mode = vm.kernel_compatible_mode_;
 	SPDLOG_DEBUG(
-		"Generating module: patch_map_val_at_compile_time={}, with arguments={}, func_name={}, is_gpu={}",
+		"Generating module: patch_map_val_at_compile_time={}, with arguments={}, kernel_compatible_mode={}, func_name={}, is_gpu={}",
 		patch_map_val_at_compile_time, main_func_with_arguments,
-		func_name, is_gpu);
+		kernel_compatible_mode, func_name, is_gpu);
 	auto context = std::make_unique<LLVMContext>();
 	auto jitModule = std::make_unique<Module>("bpf-jit", *context);
 	const auto &insts = vm.instructions;
 	if (insts.empty()) {
 		return llvm::make_error<llvm::StringError>(
 			"No instructions provided",
+			llvm::inconvertibleErrorCode());
+	}
+	const auto kernel_stack_bytes =
+		kernel_compatible_mode ? compute_kernel_stack_bytes(insts) : 0;
+	if (kernel_compatible_mode && kernel_stack_bytes > EBPF_STACK_SIZE) {
+		return llvm::make_error<llvm::StringError>(
+			"Kernel-compatible lift requires " +
+				std::to_string(kernel_stack_bytes) +
+				" bytes of stack, exceeding the kernel limit",
 			llvm::inconvertibleErrorCode());
 	}
 
@@ -145,6 +272,39 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			name, jitModule.get());
 		extFunc[name] = currFunc;
 	}
+	std::map<uint16_t, Function *> kernelPseudoCallFunc;
+	uint16_t codegen_end_pc = insts.size();
+	if (kernel_compatible_mode) {
+		for (uint16_t i = 0; i < insts.size(); i++) {
+			const auto &curr = insts[i];
+			if ((curr.opcode != EBPF_OP_CALL &&
+			     curr.opcode != (EBPF_OP_CALL | 0x8)) ||
+			    curr.src != 0x1) {
+				continue;
+			}
+			const auto dstBlkId =
+				static_cast<int64_t>(i) + 1 + curr.imm;
+			if (dstBlkId < 0 ||
+			    dstBlkId >= static_cast<int64_t>(insts.size())) {
+				return llvm::make_error<llvm::StringError>(
+					"Kernel-compatible lift found an out-of-range BPF-to-BPF target at pc " +
+						std::to_string(i),
+					llvm::inconvertibleErrorCode());
+			}
+			const auto target_pc = static_cast<uint16_t>(dstBlkId);
+			codegen_end_pc = std::min(codegen_end_pc, target_pc);
+			auto symbol_name = kernel_pseudo_call_symbol(
+				static_cast<uint32_t>(target_pc));
+			auto *decl = jitModule->getFunction(symbol_name);
+			if (!decl) {
+				decl = Function::Create(
+					helperFuncTy,
+					Function::ExternalLinkage, symbol_name,
+					jitModule.get());
+			}
+			kernelPseudoCallFunc[target_pc] = decl;
+		}
+	}
 	std::vector<bool> blockBegin(insts.size(), false);
 	// Split the blocks
 	blockBegin[0] = true;
@@ -171,14 +331,24 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		// For SPIR-V/CUDA, use address space 1 (Global) for kernel parameters
 		// For regular JIT, use default address space (0)
 		unsigned addrSpace = is_gpu ? 1 : 0;
-		func_ty = FunctionType::get(
-			is_gpu ? Type::getVoidTy(*context) :
-				  Type::getInt64Ty(*context),
-			{ llvm::PointerType::get(
-				  llvm::Type::getInt8Ty(*context),
-				  addrSpace),
-			  Type::getInt64Ty(*context) },
-			false);
+		if (kernel_compatible_mode) {
+			func_ty = FunctionType::get(
+				is_gpu ? Type::getVoidTy(*context) :
+					  Type::getInt64Ty(*context),
+				{ llvm::PointerType::get(
+					  llvm::Type::getInt8Ty(*context),
+					  addrSpace) },
+				false);
+		} else {
+			func_ty = FunctionType::get(
+				is_gpu ? Type::getVoidTy(*context) :
+					  Type::getInt64Ty(*context),
+				{ llvm::PointerType::get(
+					  llvm::Type::getInt8Ty(*context),
+					  addrSpace),
+				  Type::getInt64Ty(*context) },
+				false);
+		}
 	} else {
 		func_ty =
 			FunctionType::get(is_gpu ? Type::getVoidTy(*context) :
@@ -205,10 +375,22 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 				builder.getInt64Ty(), nullptr,
 				"r" + std::to_string(i)));
 		}
+		if (kernel_compatible_mode) {
+			for (auto *reg : regs) {
+				builder.CreateStore(builder.getInt64(0), reg);
+			}
+		}
 		// Create stack
 		// For SPIR-V/CUDA, use array type to avoid VLA issues
 		llvm::Value *stackBegin;
-		if (is_gpu) {
+		if (kernel_compatible_mode) {
+			auto *kernelStack = builder.CreateAlloca(
+				builder.getInt8Ty(),
+				builder.getInt32(kernel_stack_bytes),
+				"stackBegin");
+			kernelStack->setAlignment(llvm::Align(8));
+			stackBegin = kernelStack;
+		} else if (is_gpu) {
 			auto stackArrayTy = llvm::ArrayType::get(
 				builder.getInt64Ty(),
 				STACK_SIZE * MAX_LOCAL_FUNC_DEPTH + 10);
@@ -223,37 +405,54 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						 10),
 				"stackBegin");
 		}
-		auto stackEnd = builder.CreateGEP(
-			builder.getInt64Ty(), stackBegin,
-			{ builder.getInt32(STACK_SIZE * MAX_LOCAL_FUNC_DEPTH) },
-			"stackEnd");
+		auto stackEnd = kernel_compatible_mode ?
+				  builder.CreateGEP(
+					  builder.getInt8Ty(), stackBegin,
+					  { builder.getInt32(
+						  kernel_stack_bytes) },
+					  "stackEnd") :
+				  builder.CreateGEP(
+					  builder.getInt64Ty(), stackBegin,
+					  { builder.getInt32(
+						  STACK_SIZE *
+						  MAX_LOCAL_FUNC_DEPTH) },
+					  "stackEnd");
 		// Write stack pointer into r10
 		builder.CreateStore(stackEnd, regs[10]);
 
-		if (is_gpu) {
-			auto callStackArrayTy = llvm::ArrayType::get(
-				builder.getPtrTy(), CALL_STACK_SIZE * 5);
-			callStack = builder.CreateAlloca(callStackArrayTy,
-							  nullptr,
-							  "callStack");
-		} else {
-			callStack = builder.CreateAlloca(
-				builder.getPtrTy(),
-				builder.getInt32(CALL_STACK_SIZE * 5),
-				"callStack");
+		callStack = nullptr;
+		callItemCnt = nullptr;
+		if (!kernel_compatible_mode) {
+			if (is_gpu) {
+				auto callStackArrayTy = llvm::ArrayType::get(
+					builder.getPtrTy(),
+					CALL_STACK_SIZE * 5);
+				callStack =
+					builder.CreateAlloca(callStackArrayTy,
+							      nullptr,
+							      "callStack");
+			} else {
+				callStack = builder.CreateAlloca(
+					builder.getPtrTy(),
+					builder.getInt32(
+						CALL_STACK_SIZE * 5),
+					"callStack");
+			}
+			callItemCnt = builder.CreateAlloca(
+				builder.getInt64Ty(), nullptr,
+				"callItemCnt");
+			builder.CreateStore(builder.getInt64(0), callItemCnt);
 		}
-		callItemCnt = builder.CreateAlloca(builder.getInt64Ty(),
-						   nullptr, "callItemCnt");
-		builder.CreateStore(builder.getInt64(0), callItemCnt);
 		if (main_func_with_arguments) {
 			// Get args of uint64_t bpf_main(uint64_t, uint64_t)
 			llvm::Argument *mem = bpf_func->getArg(0);
-			llvm::Argument *mem_len = bpf_func->getArg(1);
-
 			// Write memory address into r1
 			builder.CreateStore(mem, regs[1]);
-			// Write memory len into r1
-			builder.CreateStore(mem_len, regs[2]);
+			if (!kernel_compatible_mode) {
+				llvm::Argument *mem_len = bpf_func->getArg(1);
+				// Write memory len into r2
+				builder.CreateStore(mem_len, regs[2]);
+			}
 		}
 	}
 
@@ -265,7 +464,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	{
 		IRBuilder<> builder(*context);
 
-		for (uint16_t i = 0; i < insts.size(); i++) {
+		for (uint16_t i = 0; i < codegen_end_pc; i++) {
 			if (blockBegin[i]) {
 				// Create a block
 				auto currBlk = BasicBlock::Create(
@@ -304,56 +503,63 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		}
 	}
 
-	// Basic blocks that handle the returning of local func
-
-	BasicBlock *localRetBlk =
-		BasicBlock::Create(*context, "localFuncReturnBlock", bpf_func);
-	{
-		// The most top one is the returning address, followed by r6,
-		// r7, r8, r9
-		IRBuilder<> builder(localRetBlk);
-		Value *count =
-			builder.CreateLoad(builder.getInt64Ty(), callItemCnt);
-		// Load return address
-		Value *targetAddr = builder.CreateLoad(
-			builder.getPtrTy(),
-			builder.CreateGEP(
-				builder.getPtrTy(), callStack,
-				{ builder.CreateSub(count,
-						    builder.getInt64(1)) }));
-		// Restore registers
-		for (int i = 6; i <= 9; i++) {
+	BasicBlock *localRetBlk = nullptr;
+	if (!kernel_compatible_mode) {
+		// Basic blocks that handle the returning of local func
+		localRetBlk = BasicBlock::Create(
+			*context, "localFuncReturnBlock", bpf_func);
+		{
+			// The most top one is the returning address, followed by r6,
+			// r7, r8, r9
+			IRBuilder<> builder(localRetBlk);
+			Value *count = builder.CreateLoad(
+				builder.getInt64Ty(), callItemCnt);
+			// Load return address
+			Value *targetAddr = builder.CreateLoad(
+				builder.getPtrTy(),
+				builder.CreateGEP(
+					builder.getPtrTy(), callStack,
+					{ builder.CreateSub(
+						count,
+						builder.getInt64(1)) }));
+			// Restore registers
+			for (int i = 6; i <= 9; i++) {
+				builder.CreateStore(
+					builder.CreateLoad(
+						builder.getInt64Ty(),
+						builder.CreateGEP(
+							builder.getInt64Ty(),
+							callStack,
+							{ builder.CreateSub(
+								count,
+								builder.getInt64(
+									i - 4)) })),
+					regs[i]);
+			}
 			builder.CreateStore(
-				builder.CreateLoad(
-					builder.getInt64Ty(),
-					builder.CreateGEP(
-						builder.getInt64Ty(), callStack,
-						{ builder.CreateSub(
-							count,
-							builder.getInt64(
-								i - 4)) })),
-				regs[i]);
-		}
-		builder.CreateStore(builder.CreateSub(count,
-						      builder.getInt64(5)),
-				    callItemCnt);
-		// Restore data stack
-		// r10 += stack_size
-		builder.CreateStore(
-			builder.CreateAdd(
-				builder.CreateLoad(builder.getInt64Ty(),
-						   regs[10]),
-				builder.getInt64(STACK_SIZE)),
-			regs[10]);
-		auto indrBr = builder.CreateIndirectBr(targetAddr);
-		for (const auto &item : localFuncRetBlks) {
-			indrBr->addDestination(instBlocks[item.first]);
+				builder.CreateSub(count,
+						  builder.getInt64(5)),
+				callItemCnt);
+			// Restore data stack
+			// r10 += stack_size
+			builder.CreateStore(
+				builder.CreateAdd(
+					builder.CreateLoad(
+						builder.getInt64Ty(),
+						regs[10]),
+					builder.getInt64(STACK_SIZE)),
+				regs[10]);
+			auto indrBr = builder.CreateIndirectBr(targetAddr);
+			for (const auto &item : localFuncRetBlks) {
+				indrBr->addDestination(
+					instBlocks[item.first]);
+			}
 		}
 	}
 	// Iterate over instructions
 	BasicBlock *currBB = instBlocks[0];
 	IRBuilder<> builder(currBB);
-	for (uint16_t pc = 0; pc < insts.size(); pc++) {
+	for (uint16_t pc = 0; pc < codegen_end_pc; pc++) {
 		auto inst = insts[pc];
 		if (blockBegin[pc]) {
 			if (auto itr = instBlocks.find(pc);
@@ -778,6 +984,21 @@ this conversion.
 				  builder.getInt64Ty());
 			break;
 		}
+		case EBPF_OP_LDXSB: {
+			emitLoadX(builder, &regs[0], inst, builder.getInt8Ty(),
+				  true);
+			break;
+		}
+		case EBPF_OP_LDXSH: {
+			emitLoadX(builder, &regs[0], inst,
+				  builder.getInt16Ty(), true);
+			break;
+		}
+		case EBPF_OP_LDXSW: {
+			emitLoadX(builder, &regs[0], inst,
+				  builder.getInt32Ty(), true);
+			break;
+		}
 		// LD
 		// Keep compatiblity to ubpf
 		case EBPF_OP_LDDW: {
@@ -827,6 +1048,18 @@ this conversion.
 				builder.CreateStore(builder.getInt64(val),
 						    regs[inst.dst]);
 			} else if (inst.src == 1) {
+				if (kernel_compatible_mode) {
+					SPDLOG_DEBUG(
+						"Emit kernel-compatible pseudo map fd at pc {}, imm={}",
+						raw_pc, inst.imm);
+					builder.CreateStore(
+						emitKernelPseudoSymbol(
+							builder,
+							kernel_pseudo_map_fd_symbol(
+								inst.imm)),
+						regs[inst.dst]);
+					break;
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 1 (map_by_fd) at pc {}, imm={}, patched at compile time",
 					raw_pc, inst.imm);
@@ -846,6 +1079,20 @@ this conversion.
 				}
 
 			} else if (inst.src == 2) {
+				if (kernel_compatible_mode) {
+					SPDLOG_DEBUG(
+						"Emit kernel-compatible pseudo map value at pc {}, imm1={}, imm2={}",
+						raw_pc, inst.imm,
+						nextinst.imm);
+					builder.CreateStore(
+						emitKernelPseudoSymbol(
+							builder,
+							kernel_pseudo_map_value_symbol(
+								inst.imm,
+								nextinst.imm)),
+						regs[inst.dst]);
+					break;
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 2 (map_by_fd + map_val) at pc {}, imm1={}, imm2={}",
 					raw_pc, inst.imm, nextinst.imm);
@@ -904,6 +1151,13 @@ this conversion.
 				}
 
 			} else if (inst.src == 3) {
+				if (kernel_compatible_mode) {
+					return llvm::make_error<
+						llvm::StringError>(
+						"Kernel-compatible lift does not support var_addr LDDW pseudo at pc " +
+							std::to_string(raw_pc),
+						llvm::inconvertibleErrorCode());
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 3 (var_addr) at pc {}, imm1={}",
 					raw_pc, inst.imm);
@@ -918,6 +1172,13 @@ this conversion.
 					builder.getInt64(vm.var_addr(inst.imm)),
 					regs[inst.dst]);
 			} else if (inst.src == 4) {
+				if (kernel_compatible_mode) {
+					return llvm::make_error<
+						llvm::StringError>(
+						"Kernel-compatible lift does not support code_addr LDDW pseudo at pc " +
+							std::to_string(raw_pc),
+						llvm::inconvertibleErrorCode());
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (code_addr) at pc {}, imm1={}",
 					raw_pc, inst.imm);
@@ -933,6 +1194,13 @@ this conversion.
 						vm.code_addr(inst.imm)),
 					regs[inst.dst]);
 			} else if (inst.src == 5) {
+				if (kernel_compatible_mode) {
+					return llvm::make_error<
+						llvm::StringError>(
+						"Kernel-compatible lift does not support map_by_idx LDDW pseudo at pc " +
+							std::to_string(raw_pc),
+						llvm::inconvertibleErrorCode());
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 4 (map_by_idx) at pc {}, imm1={}",
 					raw_pc, inst.imm);
@@ -952,6 +1220,13 @@ this conversion.
 				}
 
 			} else if (inst.src == 6) {
+				if (kernel_compatible_mode) {
+					return llvm::make_error<
+						llvm::StringError>(
+						"Kernel-compatible lift does not support map_by_idx + map_val LDDW pseudo at pc " +
+							std::to_string(raw_pc),
+						llvm::inconvertibleErrorCode());
+				}
 				SPDLOG_DEBUG(
 					"Emit lddw helper 6 (map_by_idx + map_val) at pc {}, imm1={}, imm2={}",
 					raw_pc, inst.imm, nextinst.imm);
@@ -1046,6 +1321,54 @@ this conversion.
 		case EBPF_OP_CALL | 0x8: {
 			// Call local function
 			if (inst.src == 0x1) {
+				if (kernel_compatible_mode) {
+					const auto target_pc =
+						static_cast<int64_t>(pc) + 1 +
+						inst.imm;
+					if (target_pc < 0 ||
+					    target_pc >=
+						    static_cast<int64_t>(
+							    insts.size())) {
+						return llvm::make_error<
+							llvm::StringError>(
+							"Kernel-compatible lift found an out-of-range BPF-to-BPF target at pc " +
+								std::to_string(
+									pc),
+							llvm::inconvertibleErrorCode());
+					}
+					auto itr = kernelPseudoCallFunc.find(
+						static_cast<uint16_t>(
+							target_pc));
+					if (itr == kernelPseudoCallFunc.end()) {
+						return llvm::make_error<
+							llvm::StringError>(
+							"Kernel-compatible lift failed to materialize a pseudo-call symbol at pc " +
+								std::to_string(
+									pc),
+							llvm::inconvertibleErrorCode());
+					}
+					auto ret = builder.CreateCall(
+						helperFuncTy, itr->second,
+						{
+							builder.CreateLoad(
+								builder.getInt64Ty(),
+								regs[1]),
+							builder.CreateLoad(
+								builder.getInt64Ty(),
+								regs[2]),
+							builder.CreateLoad(
+								builder.getInt64Ty(),
+								regs[3]),
+							builder.CreateLoad(
+								builder.getInt64Ty(),
+								regs[4]),
+							builder.CreateLoad(
+								builder.getInt64Ty(),
+								regs[5]),
+						});
+					builder.CreateStore(ret, regs[0]);
+					break;
+				}
 				// Each call will put five 8byte integer
 				// onto the call stack the most top one
 				// is the return address, followed by
@@ -1099,7 +1422,9 @@ this conversion.
 			} else {
 				if (auto exp = emitExtFuncCall(
 					    builder, inst, extFunc, &regs[0],
-					    helperFuncTy, pc, exitBlk);
+					    helperFuncTy, pc, exitBlk,
+					    kernel_compatible_mode,
+					    kernel_compatible_mode);
 				    !exp) {
 					return exp.takeError();
 				}
@@ -1108,12 +1433,17 @@ this conversion.
 			break;
 		}
 		case EBPF_OP_EXIT: {
-			builder.CreateCondBr(
-				builder.CreateICmpEQ(
-					builder.CreateLoad(builder.getInt64Ty(),
-							   callItemCnt),
-					builder.getInt64(0)),
-				exitBlk, localRetBlk);
+			if (kernel_compatible_mode) {
+				builder.CreateBr(exitBlk);
+			} else {
+				builder.CreateCondBr(
+					builder.CreateICmpEQ(
+						builder.CreateLoad(
+							builder.getInt64Ty(),
+							callItemCnt),
+						builder.getInt64(0)),
+					exitBlk, localRetBlk);
+			}
 			break;
 		}
 
@@ -1306,7 +1636,7 @@ this conversion.
 					builder, &regs[0],
 					llvm::AtomicRMWInst::BinOp::Xchg, inst,
 					inst.opcode == EBPF_ATOMIC_OPCODE_64,
-					false);
+					true);
 				break;
 			}
 			case EBPF_ATOMIC_OP_CMPXCHG: {
@@ -1331,7 +1661,7 @@ this conversion.
 						is64 ? builder.getInt64Ty() :
 						       builder.getInt32Ty(),
 						regs[inst.src]),
-					MaybeAlign(0),
+					MaybeAlign(is64 ? 8 : 4),
 					AtomicOrdering::Monotonic,
 					AtomicOrdering::Monotonic);
 				builder.CreateStore(

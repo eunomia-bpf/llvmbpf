@@ -148,7 +148,6 @@
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 // Prefer feature-detection over hardcoding LLVM_VERSION_MAJOR here.
 // These ORC headers (DynamicLibrarySearchGenerator vs ExecutionUtils) moved
-#ifdef BPFTIME_ENABLE_LLVM_PRELOAD
 // between LLVM releases. Using __has_include keeps the code resilient across
 // minor/packaging differences without forcing a specific version guard.
 #if defined(__has_include)
@@ -160,13 +159,10 @@
 #    define BPFTIME_HAVE_ORC_EXECUTIONUTILS 1
 #  endif
 #endif
-#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/Alignment.h>
-#ifdef BPFTIME_ENABLE_LLVM_PRELOAD
 #include <llvm/Support/DynamicLibrary.h>
-#endif
 #include <llvm/ExecutionEngine/JITSymbol.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Transforms/IPO.h>
@@ -179,6 +175,16 @@
 #include <string>
 #include <spdlog/spdlog.h>
 #include <tuple>
+
+// ORC runtime wrapper symbols defined in LLVM's OrcTargetProcess.
+// Declaring them here so we can take their addresses and register them
+// with LLVM's DynamicLibrary before LLJIT creation — needed when these
+// symbols have hidden visibility (e.g. LLVM statically linked into a .so).
+extern "C" {
+extern void llvm_orc_registerEHFrameSectionWrapper();
+extern void llvm_orc_registerJITLoaderGDBWrapper();
+extern void llvm_orc_registerJITLoaderGDBAllocAction();
+}
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -669,10 +675,33 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	static ExitOnError exitOnErr;
 	// Create a JIT builder
 	SPDLOG_DEBUG("LLVM-JIT: Creating LLJIT instance");
+	// Register ORC runtime wrapper symbols so LLJIT can resolve them.
+	// These symbols are statically linked from LLVM but may have hidden
+	// visibility when the host binary is a shared library (.so), making
+	// them invisible to dlsym/DynamicLibrarySearchGenerator.  Registering
+	// them via AddSymbol() before LLJIT creation guarantees resolution.
+	{
+		struct { const char *name; void *addr; } orc_syms[] = {
+			{ "llvm_orc_registerEHFrameSectionWrapper",
+			  (void *)(uintptr_t)&llvm_orc_registerEHFrameSectionWrapper },
+			{ "llvm_orc_registerJITLoaderGDBWrapper",
+			  (void *)(uintptr_t)&llvm_orc_registerJITLoaderGDBWrapper },
+			{ "llvm_orc_registerJITLoaderGDBAllocAction",
+			  (void *)(uintptr_t)&llvm_orc_registerJITLoaderGDBAllocAction },
+		};
+		for (auto &s : orc_syms) {
+			if (!llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(
+				    s.name)) {
+				llvm::sys::DynamicLibrary::AddSymbol(s.name,
+								     s.addr);
+				SPDLOG_DEBUG("LLVM-JIT: registered ORC symbol {}",
+					     s.name);
+			}
+		}
+	}
 #ifdef BPFTIME_ENABLE_LLVM_PRELOAD
-	// Preload libLLVM before creating LLJIT so that ORC runtime wrapper symbols
-	// (e.g. llvm_orc_registerEHFrameSectionWrapper) are visible during create.
-	// Allow overriding SONAME via environment variable BPFTIME_LLVM_SONAME.
+	// openEuler preload path: also try loading the shared LLVM library
+	// in case it provides additional ORC symbols.
 	{
 		const char *envSoname = ::getenv("BPFTIME_LLVM_SONAME");
 		const char *candidates[] = {
@@ -683,27 +712,15 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 			"libLLVM-17.0.6.so",
 		};
 		for (const char *name : candidates) {
-			if (!name) {
-				SPDLOG_DEBUG(
-					"LLVM-JIT: skipping empty LLVM SONAME candidate");
+			if (!name)
 				continue;
-			}
-			auto ok =
-				llvm::sys::DynamicLibrary::LoadLibraryPermanently(
-					name);
-			if (!ok) {
-				SPDLOG_DEBUG(
-					"LLVM-JIT: failed to preload {} for ORC runtime wrappers",
-					name);
-			}
-			if (llvm::sys::DynamicLibrary::
-				    SearchForAddressOfSymbol(
-					    "llvm_orc_registerEHFrameSectionWrapper")) {
-				SPDLOG_DEBUG(
-					"LLVM-JIT: preloaded {} for ORC runtime wrappers",
-					name);
-				break;
-			}
+			if (llvm::sys::DynamicLibrary::LoadLibraryPermanently(
+				    name))
+				continue;
+			SPDLOG_DEBUG(
+				"LLVM-JIT: preloaded {} for ORC runtime wrappers",
+				name);
+			break;
 		}
 	}
 #endif
@@ -723,9 +740,10 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	}
 	auto jit = std::move(*jit_err);
 
-#ifdef BPFTIME_ENABLE_LLVM_PRELOAD
-	// Make current process symbols visible to the JIT if supported
-#  if BPFTIME_HAVE_ORC_DYNLIB_SEARCH_GEN
+	// Make current process symbols visible to the JIT so that ORC
+	// runtime wrappers (e.g. llvm_orc_registerEHFrameSectionWrapper)
+	// are always resolvable, regardless of BPFTIME_ENABLE_LLVM_PRELOAD.
+#if BPFTIME_HAVE_ORC_DYNLIB_SEARCH_GEN || BPFTIME_HAVE_ORC_EXECUTIONUTILS
 	{
 		auto &jd = jit->getMainJITDylib();
 		auto gen = llvm::cantFail(
@@ -733,17 +751,6 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 				jit->getDataLayout().getGlobalPrefix()));
 		jd.addGenerator(std::move(gen));
 	}
-#  elif BPFTIME_HAVE_ORC_EXECUTIONUTILS
-	{
-		auto &jd = jit->getMainJITDylib();
-		auto gen = llvm::cantFail(
-			llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-				jit->getDataLayout().getGlobalPrefix()));
-		jd.addGenerator(std::move(gen));
-	}
-#  else
-	(void)0;
-#  endif
 #endif
 	auto &mainDylib = jit->getMainJITDylib();
 	std::vector<std::string> extFuncNames;

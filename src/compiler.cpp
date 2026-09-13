@@ -22,6 +22,9 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/BinaryFormat/Dwarf.h>
 #include <llvm/Support/Debug.h>
 #include <algorithm>
 #include <iomanip>
@@ -556,6 +559,33 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			}
 		}
 	}
+	// When BTF line info is available, build a pc->entry lookup map
+	// and set up DWARF debug info so lifted IR carries DILocations.
+	// Key type matches pc (uint16_t) — sufficient for programs up to
+	// 64K instructions.  A pre-existing limitation of this codebase.
+	std::map<uint16_t, const btf_line_info_entry *> lineInfoMap;
+	std::unique_ptr<DIBuilder> dbuilder;
+	DISubprogram *dbgSP = nullptr;
+
+	if (!vm.line_info_.empty()) {
+		for (const auto &entry : vm.line_info_)
+			lineInfoMap[static_cast<uint16_t>(entry.insn_idx)] =
+				&entry;
+
+		dbuilder = std::make_unique<DIBuilder>(*jitModule);
+		const auto &srcName = vm.line_info_.front().file_name;
+		auto *file = dbuilder->createFile(
+			srcName.empty() ? "lifted.bpf" : srcName, ".");
+		dbuilder->createCompileUnit(dwarf::DW_LANG_C, file,
+					    "llvmbpf", false, "", 0);
+		auto *subTy = dbuilder->createSubroutineType(
+			dbuilder->getOrCreateTypeArray(std::nullopt));
+		dbgSP = dbuilder->createFunction(
+			file, bpf_func->getName(), "", file, 0, subTy, 0,
+			DINode::FlagZero, DISubprogram::SPFlagDefinition);
+		bpf_func->setSubprogram(dbgSP);
+	}
+
 	// Iterate over instructions
 	BasicBlock *currBB = instBlocks[0];
 	IRBuilder<> builder(currBB);
@@ -573,6 +603,23 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			}
 		}
 		builder.SetInsertPoint(currBB);
+		if (dbgSP) {
+			// BTF line info is sparse: find the most recent entry
+			// at or before this pc via upper_bound-1.
+			auto it = lineInfoMap.upper_bound(pc);
+			if (it != lineInfoMap.begin()) {
+				--it;
+				builder.SetCurrentDebugLocation(
+					DILocation::get(*context,
+							it->second->line,
+							it->second->col,
+							dbgSP));
+			} else {
+				builder.SetCurrentDebugLocation(
+					DILocation::get(*context, 0, 0,
+							dbgSP));
+			}
+		}
 		// Precheck for registers
 		if (inst.dst > 10 || inst.src > 10) {
 			return llvm::make_error<llvm::StringError>(
@@ -1696,6 +1743,10 @@ this conversion.
 			builder.CreateBr(allBlocks[i + 1]);
 		}
 	}
+
+	if (dbuilder)
+		dbuilder->finalize();
+
 	if (!is_gpu && verifyModule(*jitModule, &dbgs())) {
 		return llvm::make_error<llvm::StringError>(
 			"Invalid module generated",

@@ -35,6 +35,17 @@ struct array_map_descriptor {
 	uint32_t max_entries = 0;
 };
 
+// BTF line info entry, decoded from BTF.ext section.
+// insn_idx is the instruction index (BTF on-disk insn_off / 8).
+// file_name is the resolved source filename from the BTF string table.
+// line and col are the decoded halves of the BTF line_col field.
+struct btf_line_info_entry {
+	uint32_t insn_idx;
+	std::string file_name;
+	uint32_t line;
+	uint32_t col;
+};
+
 class llvm_bpf_jit_context;
 
 // The JITed function signature.
@@ -102,6 +113,11 @@ class llvmbpf_vm {
 	const std::string &get_target_features() const noexcept;
 	const std::vector<std::string> &get_disabled_passes() const noexcept;
 
+	// load BTF line info for the loaded program
+	// When set, the generated LLVM IR will carry DILocation metadata.
+	int load_line_info(
+		const std::vector<btf_line_info_entry> &info) noexcept;
+
 	// Return the compiled native code pointer and size after compile()
 	std::optional<compiled_code> get_compiled_code() noexcept;
 
@@ -144,6 +160,7 @@ class llvmbpf_vm {
 	std::vector<std::string> disabled_passes_;
 	bool log_passes_ = false;
 	bool kernel_compatible_mode_ = false;
+	std::vector<btf_line_info_entry> line_info_;
 
 	std::optional<precompiled_ebpf_function> jitted_function = std::nullopt;
 };

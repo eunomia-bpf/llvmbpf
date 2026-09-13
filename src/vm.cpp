@@ -252,6 +252,13 @@ void llvmbpf_vm::set_kernel_compatible_mode(bool enabled) noexcept
 	kernel_compatible_mode_ = enabled;
 }
 
+int llvmbpf_vm::load_line_info(const std::vector<btf_line_info_entry> &info)
+	noexcept
+{
+	line_info_ = info;
+	return 0;
+}
+
 const std::string &llvmbpf_vm::get_target_cpu() const noexcept
 {
 	return target_cpu_;

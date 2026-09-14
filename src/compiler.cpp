@@ -579,7 +579,8 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 		dbuilder->createCompileUnit(dwarf::DW_LANG_C, file,
 					    "llvmbpf", false, "", 0);
 		auto *subTy = dbuilder->createSubroutineType(
-			dbuilder->getOrCreateTypeArray(std::nullopt));
+			dbuilder->getOrCreateTypeArray(
+				llvm::ArrayRef<llvm::Metadata *>{}));
 		dbgSP = dbuilder->createFunction(
 			file, bpf_func->getName(), "", file, 0, subTy, 0,
 			DINode::FlagZero, DISubprogram::SPFlagDefinition);

@@ -459,3 +459,40 @@ TEST_CASE("Test helper-based array lookup can be inlined")
 	REQUIRE(inline_lookup_helper_calls == 0);
 	REQUIRE(inline_cntrs_array[0] == 1);
 }
+
+TEST_CASE("Test BTF line info produces working debug metadata")
+{
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code((const void *)simple_cond_1,
+			     sizeof(simple_cond_1) - 1) == 0);
+
+	SECTION("Sparse line info")
+	{
+		// Sparse entries: pcs before the first entry and between
+		// entries must still resolve, and codegen must stay valid.
+		REQUIRE(vm.load_line_info({
+				{ 4, "test.bpf.c", 12, 3 },
+				{ 9, "test.bpf.c", 20, 5 },
+				{ 18, "test.bpf.c", 31, 1 },
+			}) == 0);
+
+		uint64_t ret = 0;
+		uint64_t mem = 0;
+		REQUIRE(vm.compile());
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 4);
+	}
+
+	SECTION("Empty file name falls back")
+	{
+		REQUIRE(vm.load_line_info({
+				{ 0, "", 1, 1 },
+			}) == 0);
+
+		uint64_t ret = 0;
+		uint64_t mem = 0;
+		REQUIRE(vm.compile());
+		REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+		REQUIRE(ret == 4);
+	}
+}

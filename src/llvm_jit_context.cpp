@@ -500,6 +500,13 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 		LLVMInitializeNVPTXTarget();
 		LLVMInitializeNVPTXTargetMC();
 		LLVMInitializeNVPTXAsmPrinter();
+#ifdef LLVMBPF_HAS_SPIRV
+		// generate_spirv() needs the SPIR-V backend as well.
+		LLVMInitializeSPIRVTargetInfo();
+		LLVMInitializeSPIRVTarget();
+		LLVMInitializeSPIRVTargetMC();
+		LLVMInitializeSPIRVAsmPrinter();
+#endif
 	}
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);

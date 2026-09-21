@@ -104,7 +104,7 @@ static uint32_t compute_kernel_stack_bytes(
 		}
 		required = std::max<uint32_t>(
 			required,
-			static_cast<uint32_t>(-inst.offset) + access_size - 1);
+			static_cast<uint32_t>(-inst.offset));
 	}
 	return std::max<uint32_t>(1, align_up_to_8(required));
 }

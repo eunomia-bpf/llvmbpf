@@ -62,7 +62,6 @@ if(ENABLE_LLVM_SHARED)
     list(PREPEND LLVM_LIBS LLVM)
 else()
     set(LLVM_COMPONENTS
-      ${LLVM_TARGETS_TO_BUILD}
         Core
         Support
         Target
@@ -80,20 +79,12 @@ else()
         RuntimeDyld
         OrcJIT
         MCJIT
-        # X86
-        X86CodeGen
-        X86Desc
-        X86Info
-        X86AsmParser
-        # NVPTX
-        NVPTXCodeGen
-        NVPTXDesc
-        NVPTXInfo
-        # AArch64
-        AArch64CodeGen
-        AArch64Desc
-        AArch64Info
-        AArch64AsmParser
+        # Host backend only (X86 / AArch64 / RISCV / ...), provided by
+        # LLVMConfig.cmake. Do NOT use LLVM_TARGETS_TO_BUILD here: distro
+        # packages set it to every backend, which bloats the agent by ~60MB.
+        ${LLVM_NATIVE_ARCH}
+        # NVPTX is required by generate_ptx()
+        NVPTX
     )
 
     # Add SPIR-V components only if SPIR-V is enabled and LLVM version supports it

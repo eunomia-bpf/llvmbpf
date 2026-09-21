@@ -496,3 +496,17 @@ TEST_CASE("Test BTF line info produces working debug metadata")
 		REQUIRE(ret == 4);
 	}
 }
+
+TEST_CASE("Test NVPTX target is registered")
+{
+	// generate_ptx() only needs the NVPTX backend registered in the
+	// TargetRegistry; it does not need CUDA or a GPU, and it does
+	// not create an LLJIT instance.
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code((const void *)simple_cond_1,
+			     sizeof(simple_cond_1) - 1) == 0);
+	auto ptx = vm.generate_ptx("sm_60");
+	REQUIRE(ptx.has_value());
+	REQUIRE(ptx->find(".target sm_60") != std::string::npos);
+	REQUIRE(ptx->find(".visible .func bpf_main") != std::string::npos);
+}

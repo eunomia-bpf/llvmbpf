@@ -489,11 +489,17 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 	if (__atomic_compare_exchange_n(&llvm_initialized, &zero, 1, false,
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
 		SPDLOG_DEBUG("Initializing llvm");
-		llvm::InitializeAllTargetInfos();
-		llvm::InitializeAllTargets();
-		llvm::InitializeAllTargetMCs();
-		llvm::InitializeAllAsmPrinters();
-		llvm::InitializeAllAsmParsers();
+		// Only register the host backend (X86 / AArch64 / ... picked by
+		// LLVM_NATIVE_ARCH at LLVM build time) plus NVPTX for
+		// generate_ptx(). InitializeAll* would pull every backend that
+		// the LLVM package was built with into the final binary.
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+		llvm::InitializeNativeTargetAsmParser();
+		LLVMInitializeNVPTXTargetInfo();
+		LLVMInitializeNVPTXTarget();
+		LLVMInitializeNVPTXTargetMC();
+		LLVMInitializeNVPTXAsmPrinter();
 	}
 	compiling = std::make_unique<pthread_spinlock_t>();
 	pthread_spin_init(compiling.get(), PTHREAD_PROCESS_PRIVATE);

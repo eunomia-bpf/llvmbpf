@@ -194,12 +194,10 @@ static const struct ebpf_inst test_prog[] = {
 
 int main()
 {
-	// Initialize LLVM components for all targets
-	llvm::InitializeAllTargetInfos();
-	llvm::InitializeAllTargets();
-	llvm::InitializeAllTargetMCs();
-	llvm::InitializeAllAsmPrinters();
-	llvm::InitializeAllAsmParsers();
+	// Set up llvmbpf VM. Constructing it registers the LLVM backends the
+	// library was built with (host, NVPTX and SPIR-V); do not call
+	// InitializeAll* here, the other backends are not linked in.
+	llvmbpf_vm vm;
 
 	// Verify SPIR-V target is available
 	std::string error;
@@ -213,8 +211,6 @@ int main()
 	}
 	std::cout << "SPIR-V target found successfully" << std::endl;
 
-	// Set up llvmbpf VM
-	llvmbpf_vm vm;
 	vm.register_external_function(1, "test_func", (void *)test_func);
 
 	// Load eBPF program

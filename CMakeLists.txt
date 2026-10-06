@@ -47,9 +47,10 @@ set_target_properties(llvmbpf_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CU
 
 find_package(LLVM REQUIRED CONFIG)
 
+target_compile_definitions(llvmbpf_vm PUBLIC ${LLVM_DEFINITIONS})
 message(STATUS "Checking LLVM_VERSION_MAJOR macro value...")
 message(STATUS "LLVM_VERSION_MAJOR is: ${LLVM_VERSION_MAJOR}")
-
+message(STATUS "LLVM_DEFINITIONS = ${LLVM_DEFINITIONS}")
 if(${LLVM_PACKAGE_VERSION} VERSION_LESS 15)
     message(FATAL_ERROR "LLVM version must be >=15")
 endif()

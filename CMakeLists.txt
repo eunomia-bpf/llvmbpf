@@ -44,9 +44,10 @@ bpftime_add_library(llvmbpf_vm
 )
 
 set_target_properties(llvmbpf_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/../")
-target_compile_definitions(llvmbpf_vm PUBLIC ${LLVM_DEFINITIONS})
+
 find_package(LLVM REQUIRED CONFIG)
 
+target_compile_definitions(llvmbpf_vm PUBLIC ${LLVM_DEFINITIONS})
 message(STATUS "Checking LLVM_VERSION_MAJOR macro value...")
 message(STATUS "LLVM_VERSION_MAJOR is: ${LLVM_VERSION_MAJOR}")
 message(STATUS "LLVM_DEFINITIONS = ${LLVM_DEFINITIONS}")

@@ -66,7 +66,6 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Object/ModuleSymbolTable.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/PassPlugin.h"
 #include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
@@ -177,14 +176,11 @@
 #include <tuple>
 
 // ORC runtime wrapper symbols defined in LLVM's OrcTargetProcess.
-// Declaring them here so we can take their addresses and register them
+// Use the installed declarations so we can register their addresses
 // with LLVM's DynamicLibrary before LLJIT creation — needed when these
 // symbols have hidden visibility (e.g. LLVM statically linked into a .so).
-extern "C" {
-extern void llvm_orc_registerEHFrameSectionWrapper();
-extern void llvm_orc_registerJITLoaderGDBWrapper();
-extern void llvm_orc_registerJITLoaderGDBAllocAction();
-}
+#include <llvm/ExecutionEngine/Orc/TargetProcess/RegisterEHFrames.h>
+#include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 
 using namespace llvm;
 using namespace llvm::orc;
@@ -203,6 +199,26 @@ struct spin_lock_guard {
 	}
 };
 
+#if LLVM_VERSION_MAJOR >= 17
+// LLVM 24 snapshots differ: newer PassBuilder constructors require a context.
+// Detect the signature so both upstream and ROCm's snapshot remain supported.
+template <typename Builder = llvm::PassBuilder>
+static Builder make_pass_builder(llvm::LLVMContext &context,
+                                 llvm::PassInstrumentationCallbacks &callbacks)
+{
+	if constexpr (requires {
+		Builder(context, nullptr, llvm::PipelineTuningOptions(),
+			std::nullopt, &callbacks);
+	}) {
+		return Builder(context, nullptr, llvm::PipelineTuningOptions(),
+			       std::nullopt, &callbacks);
+	} else {
+		return Builder(nullptr, llvm::PipelineTuningOptions(),
+			       std::nullopt, &callbacks);
+	}
+}
+#endif
+
 static void optimizeModule(llvm::Module &M, int opt_level,
 			   const std::vector<std::string> &disabled_passes,
 			   bool log_passes)
@@ -213,7 +229,7 @@ static void optimizeModule(llvm::Module &M, int opt_level,
 	PassInstrumentationCallbacks PIC;
 	if (!disabled_passes.empty()) {
 		PIC.registerShouldRunOptionalPassCallback(
-			[&disabled_passes](StringRef pass_name, Any) {
+			[&disabled_passes](StringRef pass_name, auto) {
 				for (const auto &disabled : disabled_passes) {
 					if (pass_name.contains(
 						    StringRef(disabled))) {
@@ -225,7 +241,7 @@ static void optimizeModule(llvm::Module &M, int opt_level,
 	}
 	if (log_passes) {
 		PIC.registerBeforeNonSkippedPassCallback(
-			[](StringRef pass_name, Any) {
+			[](StringRef pass_name, auto) {
 				llvm::errs() << "[llvmbpf pass] "
 					     << pass_name << "\n";
 			});
@@ -244,7 +260,7 @@ static void optimizeModule(llvm::Module &M, int opt_level,
 	// Take a look at the PassBuilder constructor parameters for more
 	// customization, e.g. specifying a TargetMachine or various debugging
 	// options.
-	PassBuilder PB(nullptr, PipelineTuningOptions(), std::nullopt, &PIC);
+	auto PB = make_pass_builder(M.getContext(), PIC);
 
 	// Register all the basic analyses with the managers.
 	PB.registerModuleAnalyses(MAM);
@@ -437,7 +453,7 @@ bool llvm_bpf_jit_context::inline_array_map_lookup_helpers(llvm::Module &module)
 		llvm::IRBuilder<> builder(call);
 		auto *keyPtr = builder.CreateIntToPtr(
 			call->getArgOperand(1),
-			llvm::PointerType::getUnqual(builder.getInt32Ty()),
+			llvm::PointerType::getUnqual(builder.getContext()),
 			"array_lookup.key_ptr");
 		auto *index = builder.CreateLoad(builder.getInt32Ty(), keyPtr,
 						 "array_lookup.index");
@@ -490,16 +506,18 @@ llvm_bpf_jit_context::llvm_bpf_jit_context(llvmbpf_vm &vm) : vm(vm)
 					__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
 		SPDLOG_DEBUG("Initializing llvm");
 		// Only register the host backend (X86 / AArch64 / ... picked by
-		// LLVM_NATIVE_ARCH at LLVM build time) plus NVPTX for
+		// LLVM_NATIVE_ARCH at LLVM build time) plus available NVPTX for
 		// generate_ptx(). InitializeAll* would pull every backend that
 		// the LLVM package was built with into the final binary.
 		llvm::InitializeNativeTarget();
 		llvm::InitializeNativeTargetAsmPrinter();
 		llvm::InitializeNativeTargetAsmParser();
+#ifdef LLVMBPF_HAS_NVPTX
 		LLVMInitializeNVPTXTargetInfo();
 		LLVMInitializeNVPTXTarget();
 		LLVMInitializeNVPTXTargetMC();
 		LLVMInitializeNVPTXAsmPrinter();
+#endif
 #ifdef LLVMBPF_HAS_SPIRV
 		// generate_spirv() needs the SPIR-V backend as well.
 		LLVMInitializeSPIRVTargetInfo();
@@ -695,10 +713,21 @@ llvm_bpf_jit_context::create_and_initialize_lljit_instance()
 	// them via AddSymbol() before LLJIT creation guarantees resolution.
 	{
 		struct { const char *name; void *addr; } orc_syms[] = {
+#if LLVM_VERSION_MAJOR >= 21
+			{ "llvm_orc_registerEHFrameSectionAllocAction",
+			  (void *)(uintptr_t)&llvm_orc_registerEHFrameSectionAllocAction },
+			{ "llvm_orc_deregisterEHFrameSectionAllocAction",
+			  (void *)(uintptr_t)&llvm_orc_deregisterEHFrameSectionAllocAction },
+#else
 			{ "llvm_orc_registerEHFrameSectionWrapper",
 			  (void *)(uintptr_t)&llvm_orc_registerEHFrameSectionWrapper },
+			{ "llvm_orc_deregisterEHFrameSectionWrapper",
+			  (void *)(uintptr_t)&llvm_orc_deregisterEHFrameSectionWrapper },
+#endif
+#if LLVM_VERSION_MAJOR < 22
 			{ "llvm_orc_registerJITLoaderGDBWrapper",
 			  (void *)(uintptr_t)&llvm_orc_registerJITLoaderGDBWrapper },
+#endif
 			{ "llvm_orc_registerJITLoaderGDBAllocAction",
 			  (void *)(uintptr_t)&llvm_orc_registerJITLoaderGDBAllocAction },
 		};
@@ -882,21 +911,27 @@ precompiled_ebpf_function llvm_bpf_jit_context::get_entry_address()
 static std::unique_ptr<llvm::TargetMachine>
 createNVPTXTargetMachine(const char *target_cpu)
 {
+#ifndef LLVMBPF_HAS_NVPTX
+	throw std::runtime_error("NVPTX backend is not available in this LLVM build");
+#endif
 	std::string error;
+	llvm::Triple triple("nvptx64-nvidia-cuda");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget("nvptx64", error);
+		llvm::TargetRegistry::lookupTarget("nvptx64", triple, error);
 	if (!target) {
 		throw std::runtime_error("Failed to find NVPTX target: " +
 					 error);
 	}
 
-	llvm::Triple triple("nvptx64-nvidia-cuda");
-
 	llvm::TargetOptions options;
-	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple.str(), target_cpu, "",
-					    options, llvm::Reloc::Static));
+		target->createTargetMachine(
+#if LLVM_VERSION_MAJOR >= 21
+			triple,
+#else
+			triple.str(),
+#endif
+			target_cpu, "", options, llvm::Reloc::Static));
 	return result;
 }
 std::optional<std::string>
@@ -975,20 +1010,23 @@ static std::unique_ptr<llvm::TargetMachine>
 createSPIRVTargetMachine(const char *target_cpu)
 {
 	std::string error;
+	llvm::Triple triple("spirv64-unknown-unknown");
 	const llvm::Target *target =
-		llvm::TargetRegistry::lookupTarget("spirv64", error);
+		llvm::TargetRegistry::lookupTarget("spirv64", triple, error);
 	if (!target) {
 		throw std::runtime_error("Failed to find SPIR-V target: " +
 					 error);
 	}
 
-	llvm::Triple triple("spirv64-unknown-unknown");
-
 	llvm::TargetOptions options;
-	options.FloatABIType = llvm::FloatABI::Default;
 	auto result = std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(triple.str(), target_cpu, "",
-					    options, llvm::Reloc::Static));
+		target->createTargetMachine(
+#if LLVM_VERSION_MAJOR >= 21
+			triple,
+#else
+			triple.str(),
+#endif
+			target_cpu, "", options, llvm::Reloc::Static));
 	return result;
 }
 

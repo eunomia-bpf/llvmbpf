@@ -338,17 +338,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			func_ty = FunctionType::get(
 				is_gpu ? Type::getVoidTy(*context) :
 					  Type::getInt64Ty(*context),
-				{ llvm::PointerType::get(
-					  llvm::Type::getInt8Ty(*context),
-					  addrSpace) },
+				{ llvm::PointerType::get(*context, addrSpace) },
 				false);
 		} else {
 			func_ty = FunctionType::get(
 				is_gpu ? Type::getVoidTy(*context) :
 					  Type::getInt64Ty(*context),
-				{ llvm::PointerType::get(
-					  llvm::Type::getInt8Ty(*context),
-					  addrSpace),
+				{ llvm::PointerType::get(*context, addrSpace),
 				  Type::getInt64Ty(*context) },
 				false);
 		}
@@ -1739,7 +1735,9 @@ this conversion.
 	// Add br for all blocks
 	for (size_t i = 0; i < allBlocks.size() - 1; i++) {
 		auto &currBlk = allBlocks[i];
-		if (currBlk->getTerminator() == nullptr) {
+		// LLVM 24 getTerminator() requires a well-formed block. During
+		// construction, inspect the last instruction without that assumption.
+		if (currBlk->empty() || !currBlk->back().isTerminator()) {
 			builder.SetInsertPoint(allBlocks[i]);
 			builder.CreateBr(allBlocks[i + 1]);
 		}

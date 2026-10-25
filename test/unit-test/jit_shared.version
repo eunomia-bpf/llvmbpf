@@ -1,0 +1,1 @@
+{ global: llvmbpf_test_run; local: *; };

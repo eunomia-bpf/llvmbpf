@@ -47,6 +47,17 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target all -j
 ```
 
+Select an LLVM installation with `-DLLVM_DIR=/path/to/llvm/lib/cmake/llvm`.
+LLVM 15 remains supported, including JIT/AOT and PTX; LLVM 24 is also supported,
+including ROCm packages that omit NVPTX. PTX generation requires LLVM's NVPTX
+backend: requesting `LLVMBPF_ENABLE_PTX=ON` without it fails at configure time,
+and calling `generate_ptx()` without it reports an explicit error. Keep LLVM
+headers and libraries from the same installation.
+
+With `-DBPFTIME_ENABLE_UNIT_TESTING=ON`, run
+`ctest --test-dir build --output-on-failure` after building. On Linux this also tests JIT/AOT from a
+`dlopen`-loaded library with private LLVM symbols.
+
 ## Usage
 
 ### Use llvmbpf as a library

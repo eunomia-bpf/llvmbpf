@@ -47,7 +47,10 @@ set_target_properties(llvmbpf_vm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CU
 
 find_package(LLVM REQUIRED CONFIG)
 
-target_compile_definitions(llvmbpf_vm PUBLIC ${LLVM_DEFINITIONS})
+# LLVM packages supply either a CMake list or a space-separated flags string.
+string(REPLACE ";" " " LLVMBPF_LLVM_DEFINITIONS "${LLVM_DEFINITIONS}")
+separate_arguments(LLVMBPF_LLVM_DEFINITIONS NATIVE_COMMAND "${LLVMBPF_LLVM_DEFINITIONS}")
+target_compile_definitions(llvmbpf_vm PUBLIC ${LLVMBPF_LLVM_DEFINITIONS})
 message(STATUS "Checking LLVM_VERSION_MAJOR macro value...")
 message(STATUS "LLVM_VERSION_MAJOR is: ${LLVM_VERSION_MAJOR}")
 message(STATUS "LLVM_DEFINITIONS = ${LLVM_DEFINITIONS}")
@@ -58,6 +61,14 @@ endif()
 option(ENABLE_LLVM_SHARED "Link shared library of LLVM" NO)
 option(BUILD_LLVM_AOT_CLI "Build AOT cli, which rely on libbpf" NO)
 option(BPFTIME_ENABLE_LLVM_PRELOAD "Enable openEuler-specific LLVM preload workaround" OFF)
+
+# ROCm's LLVM package may contain only AMDGPU, SPIRV and the native target.
+# CPU JIT and ROCm support do not require the NVPTX backend.
+if("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
+    target_compile_definitions(llvmbpf_vm PRIVATE LLVMBPF_HAS_NVPTX=1)
+elseif(LLVMBPF_ENABLE_PTX OR BPFTIME_ENABLE_CUDA_ATTACH)
+    message(FATAL_ERROR "CUDA/PTX support requires an LLVM installation with the NVPTX backend")
+endif()
 
 if(ENABLE_LLVM_SHARED)
     list(PREPEND LLVM_LIBS LLVM)
@@ -84,9 +95,11 @@ else()
         # LLVMConfig.cmake. Do NOT use LLVM_TARGETS_TO_BUILD here: distro
         # packages set it to every backend, which bloats the agent by ~60MB.
         ${LLVM_NATIVE_ARCH}
-        # NVPTX is required by generate_ptx()
-        NVPTX
     )
+
+    if("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
+        list(APPEND LLVM_COMPONENTS NVPTX)
+    endif()
 
     # Add SPIR-V components only if SPIR-V is enabled and LLVM version supports it
     if(LLVMBPF_ENABLE_SPIRV AND ${LLVM_VERSION_MAJOR} GREATER_EQUAL 18)
@@ -182,6 +195,7 @@ endif()
 
 if(BPFTIME_ENABLE_UNIT_TESTING)
     message(STATUS "Build unit tests for the project. Tests should always be found in the test folder\n")
+    enable_testing()
     add_subdirectory(test)
 endif()
 

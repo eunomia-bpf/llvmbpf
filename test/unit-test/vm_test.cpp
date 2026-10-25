@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <cstdint>
 #include <iostream>
 #include "llvmbpf.hpp"
@@ -497,7 +498,7 @@ TEST_CASE("Test BTF line info produces working debug metadata")
 	}
 }
 
-TEST_CASE("Test NVPTX target is registered")
+TEST_CASE("Test NVPTX backend availability")
 {
 	// generate_ptx() only needs the NVPTX backend registered in the
 	// TargetRegistry; it does not need CUDA or a GPU, and it does
@@ -505,8 +506,13 @@ TEST_CASE("Test NVPTX target is registered")
 	bpftime::llvmbpf_vm vm;
 	REQUIRE(vm.load_code((const void *)simple_cond_1,
 			     sizeof(simple_cond_1) - 1) == 0);
+#ifdef LLVMBPF_TEST_HAS_NVPTX
 	auto ptx = vm.generate_ptx("sm_60");
 	REQUIRE(ptx.has_value());
 	REQUIRE(ptx->find(".target sm_60") != std::string::npos);
 	REQUIRE(ptx->find(".visible .func bpf_main") != std::string::npos);
+#else
+	REQUIRE_THROWS_WITH(vm.generate_ptx("sm_60"),
+		"NVPTX backend is not available in this LLVM build");
+#endif
 }

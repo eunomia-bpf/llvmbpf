@@ -24,6 +24,7 @@ For a comprehensive userspace eBPF runtime that includes support for maps, helpe
   - [build project](#build-project)
   - [Usage](#usage)
     - [Use llvmbpf as a library](#use-llvmbpf-as-a-library)
+    - [Export LLVM IR through the library](#export-llvm-ir-through-the-library)
     - [Use llvmbpf as a AOT compiler](#use-llvmbpf-as-a-aot-compiler)
     - [load eBPF bytecode from ELF file](#load-ebpf-bytecode-from-elf-file)
     - [Maps and data relocation support](#maps-and-data-relocation-support)
@@ -86,6 +87,53 @@ void run_ebpf_prog(const void *code, size_t code_len)
     printf("res = %" PRIu64 "\n", res);
 }
 ```
+
+### Export LLVM IR through the library
+
+`generate_llvm_ir()` returns unoptimized LLVM assembly as a string without
+printing IR, generating native code, or creating a JIT. This lets a consumer
+link its own helper implementations and compile for its chosen target, including
+the bpftime ROCm/Luthier instrumentation pipeline.
+
+```cpp
+bpftime::llvmbpf_vm vm;
+if (vm.load_code(code, code_len) != 0)
+    return;
+// Register helper ID 1000 without a host implementation for IR-only use.
+vm.register_external_function(1000, "probe_helper", nullptr);
+auto ir = vm.generate_llvm_ir("probe_entry"); // Default name: bpf_main
+if (!ir) {
+    auto error = vm.get_error_message();
+    return;
+}
+// Parse *ir into the consumer's LLVMContext, link helpers, then lower/compile.
+```
+
+- The entry ABI is `i64 (ptr, i64)` (context and length), or `i64 (ptr)` when
+  `set_kernel_compatible_mode(true)` is selected. Entry names must be nonempty
+  and cannot use the reserved `llvm.`, `_bpf_helper_ext_`, `__lddw_helper_`, or
+  `__llvmbpf_pseudo_` prefixes.
+- Registered helpers remain declarations named `_bpf_helper_ext_NNNN` (decimal
+  helper ID, padded to at least four digits), with ABI
+  `i64 (i64, i64, i64, i64, i64)`. The registration label does not name the IR
+  symbol. Neither helper pointers nor array-map host addresses are inlined.
+- Pseudo LDDW loads retain calls to `__lddw_helper_map_by_fd`,
+  `__lddw_helper_map_by_idx`, `__lddw_helper_var_addr`, and
+  `__lddw_helper_code_addr`, each with ABI `i64 (i32)`. Map-value loads additionally
+  call `__lddw_helper_map_val`, with ABI `i64 (i64)`, then add the signed offset.
+  Export does not invoke `set_lddw_helpers()` callbacks; consumers must resolve
+  these symbols even if callbacks are registered. Kernel-compatible mode keeps
+  its existing pseudo-symbol representation instead.
+- The module has no target triple or data layout. It retains the translator's
+  64-bit register/pointer representation and generic address-space stack.
+  Consumers must configure the target and perform any required address-space
+  lowering (including AMDGPU private stack handling), resolve helpers, and
+  optimize before code generation. This API alone does not produce GPU code.
+
+Export can be repeated before or after JIT/AOT compilation and does not change
+the cached executable. Literal addresses already embedded in the input bytecode
+remain literals; export cannot recover relocations from them. Use matching LLVM
+versions for producers and consumers of the IR.
 
 ### Use llvmbpf as a AOT compiler
 

@@ -91,6 +91,18 @@ class llvmbpf_vm {
 	std::optional<std::vector<uint8_t> >
 	do_aot_compile(bool print_ir = false) noexcept;
 
+	// Export unoptimized LLVM assembly without a target triple/data layout,
+	// native code generation, or execution of host helper/LDDW callbacks.
+	// Helpers retain their _bpf_helper_ext_NNNN symbols and five-i64 ABI;
+	// register them with a null pointer for IR-only use. Pseudo LDDW loads
+	// retain symbolic resolver calls (or kernel-compatible pseudo symbols).
+	// Entry ABI: i64(ptr, i64), or i64(ptr) in kernel-compatible mode.
+	// Consumers must supply a target layout, address-space lowering and
+	// helper definitions before compiling for another target.
+	// Returns nullopt on error; inspect get_error_message().
+	std::optional<std::string>
+	generate_llvm_ir(const std::string &func_name = "bpf_main") noexcept;
+
 	// Load the AOT object file into the vm and link it with the
 	// external functions
 	// return the JITed function if success

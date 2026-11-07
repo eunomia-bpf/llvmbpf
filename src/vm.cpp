@@ -326,6 +326,23 @@ llvmbpf_vm::do_aot_compile(bool print_ir) noexcept
 	}
 }
 
+std::optional<std::string>
+llvmbpf_vm::generate_llvm_ir(const std::string &func_name) noexcept
+{
+	try {
+		auto result = jit_ctx->generate_llvm_ir(func_name);
+		if (!result) {
+			error_msg = llvm::toString(result.takeError());
+			return {};
+		}
+		error_msg.clear();
+		return std::move(*result);
+	} catch (const std::exception &e) {
+		error_msg = e.what();
+		return {};
+	}
+}
+
 std::optional<bpftime::precompiled_ebpf_function>
 llvmbpf_vm::load_aot_object(const std::vector<uint8_t> &object) noexcept
 {

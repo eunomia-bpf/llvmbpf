@@ -13,6 +13,7 @@ endif()
 set(TEST_SOURCES
     bpf_prog_test.cpp
     vm_test.cpp
+    ir_test.cpp
 )
 
 add_executable(llvm_jit_tests ${TEST_SOURCES})
@@ -20,6 +21,11 @@ set_property(TARGET llvm_jit_tests PROPERTY CXX_STANDARD 20)
 add_dependencies(llvm_jit_tests llvmbpf_vm)
 target_link_libraries(llvm_jit_tests PRIVATE llvmbpf_vm Catch2::Catch2WithMain ${LIBBPF_LIBRARIES})
 target_include_directories(llvm_jit_tests PRIVATE ${Catch2_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR}/../include ${CMAKE_CURRENT_SOURCE_DIR}/../src ${LIBBPF_INCLUDE_DIRS} ${LIBBPF_INCLUDE_DIRS}/uapi)
+# IR export tests parse, link and execute the returned module as a consumer.
+target_include_directories(llvm_jit_tests SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+if(DEFINED LLVM_ENABLE_RTTI AND NOT LLVM_ENABLE_RTTI)
+    set_source_files_properties(ir_test.cpp PROPERTIES COMPILE_OPTIONS -fno-rtti)
+endif()
 add_test(NAME llvm_jit_tests COMMAND llvm_jit_tests)
 
 if("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)

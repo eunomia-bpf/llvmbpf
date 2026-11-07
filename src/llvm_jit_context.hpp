@@ -44,7 +44,7 @@ class llvm_bpf_jit_context {
 		       bool patch_map_val_at_compile_time,
 		       bool main_func_with_arguments = true,
 		       const std::string &func_name = "bpf_main",
-		       bool is_gpu = false);
+		       bool is_gpu = false, bool symbolic_lddw = false);
 	bool inline_array_map_lookup_helpers(llvm::Module &module);
 	std::vector<uint8_t>
 	do_aot_compile(const std::vector<std::string> &extFuncNames,
@@ -62,6 +62,8 @@ class llvm_bpf_jit_context {
 	virtual ~llvm_bpf_jit_context();
 	precompiled_ebpf_function get_entry_address();
 	std::vector<uint8_t> do_aot_compile(bool print_ir = false);
+	llvm::Expected<std::string>
+	generate_llvm_ir(const std::string &func_name);
 	llvm::Error load_aot_object(const std::vector<uint8_t> &buf);
 	std::optional<std::string>
 	generate_ptx(bool main_with_arguments = true,

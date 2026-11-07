@@ -638,6 +638,41 @@ std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(
 	}
 }
 
+llvm::Expected<std::string>
+llvm_bpf_jit_context::generate_llvm_ir(const std::string &func_name)
+{
+	// LLVM silently renames colliding definitions. Reject reserved names so
+	// the requested entry symbol remains usable when linking probe modules.
+	if (func_name.empty() || func_name.find('\0') != std::string::npos ||
+	    func_name.rfind("llvm.", 0) == 0 ||
+	    func_name.rfind("_bpf_helper_ext_", 0) == 0 ||
+	    func_name.rfind("__lddw_helper_", 0) == 0 ||
+	    func_name.rfind("__llvmbpf_pseudo_", 0) == 0) {
+		return llvm::make_error<llvm::StringError>(
+			"LLVM IR entry name is empty or reserved",
+			llvm::inconvertibleErrorCode());
+	}
+	spin_lock_guard guard(compiling.get());
+	std::vector<std::string> ext_names;
+	for (uint32_t i = 0; i < vm.ext_funcs.size(); ++i) {
+		if (vm.ext_funcs[i])
+			ext_names.push_back(ext_func_sym(i));
+	}
+	// Leave target selection, optimization and symbol resolution to the
+	// consumer. In particular, never bake host map addresses into this IR.
+	auto module = generateModule(ext_names, {}, false, true, func_name,
+				     false, true);
+	if (!module)
+		return module.takeError();
+	return module->withModuleDo([](llvm::Module &module) {
+		std::string text;
+		llvm::raw_string_ostream out(text);
+		module.print(out, nullptr);
+		out.flush();
+		return text;
+	});
+}
+
 std::vector<uint8_t> llvm_bpf_jit_context::do_aot_compile(bool print_ir)
 {
 	std::vector<std::string> extNames, lddwNames;

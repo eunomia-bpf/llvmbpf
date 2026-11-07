@@ -209,7 +209,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	const std::vector<std::string> &extFuncNames,
 	const std::vector<std::string> &lddwHelpers,
 	bool patch_map_val_at_compile_time, bool main_func_with_arguments,
-	const std::string &func_name, bool is_gpu)
+	const std::string &func_name, bool is_gpu, bool symbolic_lddw)
 {
 	const bool kernel_compatible_mode = vm.kernel_compatible_mode_;
 	SPDLOG_DEBUG(
@@ -1086,6 +1086,48 @@ this conversion.
 			pc++;
 			auto raw_pc = pc - 1;
 
+			if (symbolic_lddw && !kernel_compatible_mode &&
+			    inst.src >= 1 && inst.src <= 6) {
+				// Export relocation operations without calling
+				// host resolvers, even when callbacks were
+				// registered.
+				const char *name = nullptr;
+				switch (inst.src) {
+				case 1:
+				case 2:
+					name = LDDW_HELPER_MAP_BY_FD;
+					break;
+				case 3:
+					name = LDDW_HELPER_VAR_ADDR;
+					break;
+				case 4:
+					name = LDDW_HELPER_CODE_ADDR;
+					break;
+				case 5:
+				case 6:
+					name = LDDW_HELPER_MAP_BY_IDX;
+					break;
+				}
+				auto resolver = jitModule->getOrInsertFunction(
+					name, lddwHelperWithUint32);
+				Value *result = builder.CreateCall(
+					resolver,
+					{ builder.getInt32(inst.imm) });
+				if (inst.src == 2 || inst.src == 6) {
+					auto map_val =
+						jitModule->getOrInsertFunction(
+							LDDW_HELPER_MAP_VAL,
+							lddwHelperWithUint64);
+					result = builder.CreateCall(map_val,
+								    { result });
+					result = builder.CreateAdd(
+						result,
+						builder.getInt64(nextinst.imm));
+				}
+				builder.CreateStore(result, regs[inst.dst]);
+				break;
+			}
+
 			if (inst.src == 0) {
 				SPDLOG_DEBUG("Emit lddw helper 0 at pc {}",
 					     raw_pc);
@@ -1746,9 +1788,14 @@ this conversion.
 	if (dbuilder)
 		dbuilder->finalize();
 
-	if (!is_gpu && verifyModule(*jitModule, &dbgs())) {
+	std::string diagnostics;
+	raw_string_ostream diagnostic_stream(diagnostics);
+	if (!is_gpu &&
+	    verifyModule(*jitModule,
+			 symbolic_lddw ? &diagnostic_stream : &dbgs())) {
 		return llvm::make_error<llvm::StringError>(
-			"Invalid module generated",
+			"Invalid module generated" +
+				(diagnostics.empty() ? "" : ": " + diagnostics),
 			llvm::inconvertibleErrorCode());
 	}
 

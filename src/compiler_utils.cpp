@@ -195,13 +195,13 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 }
 
 llvm::Expected<llvm::BasicBlock *>
-loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
-		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+loadJmpDstBlock(uint32_t pc, const ebpf_inst &inst,
+		const std::map<uint32_t, llvm::BasicBlock *> &instBlocks,
 		bool useOffset)
 {
 	SPDLOG_TRACE("pc {} request jump to {}", pc,
-		     pc + 1 + (useOffset ? inst.offset : inst.imm));
-	uint16_t dstBlkId = pc + 1 + (useOffset ? inst.offset : inst.imm);
+		     (int64_t)pc + 1 + (useOffset ? inst.offset : inst.imm));
+	uint32_t dstBlkId = pc + 1 + (useOffset ? inst.offset : inst.imm);
 	if (auto itr = instBlocks.find(dstBlkId); itr != instBlocks.end()) {
 		return itr->second;
 	} else {
@@ -214,10 +214,10 @@ loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
 }
 
 llvm::Expected<llvm::BasicBlock *>
-loadCallDstBlock(uint16_t pc, const ebpf_inst &inst,
-		 const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
+loadCallDstBlock(uint32_t pc, const ebpf_inst &inst,
+		 const std::map<uint32_t, llvm::BasicBlock *> &instBlocks)
 {
-	uint16_t dstBlkId = pc + 1 + inst.imm;
+	uint32_t dstBlkId = pc + 1 + inst.imm;
 	if (auto itr = instBlocks.find(dstBlkId); itr != instBlocks.end()) {
 		return itr->second;
 	} else {
@@ -230,10 +230,10 @@ loadCallDstBlock(uint16_t pc, const ebpf_inst &inst,
 }
 
 llvm::Expected<llvm::BasicBlock *>
-loadJmpNextBlock(uint16_t pc, const ebpf_inst &inst,
-		 const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
+loadJmpNextBlock(uint32_t pc, const ebpf_inst &inst,
+		 const std::map<uint32_t, llvm::BasicBlock *> &instBlocks)
 {
-	uint16_t nextBlkId = pc + 1;
+	uint32_t nextBlkId = pc + 1;
 	if (auto itr = instBlocks.find(nextBlkId); itr != instBlocks.end()) {
 		return itr->second;
 	} else {
@@ -246,8 +246,8 @@ loadJmpNextBlock(uint16_t pc, const ebpf_inst &inst,
 }
 
 llvm::Expected<std::pair<llvm::BasicBlock *, llvm::BasicBlock *> >
-localJmpDstAndNextBlk(uint16_t pc, const ebpf_inst &inst,
-		      const std::map<uint16_t, llvm::BasicBlock *> &instBlocks)
+localJmpDstAndNextBlk(uint32_t pc, const ebpf_inst &inst,
+		      const std::map<uint32_t, llvm::BasicBlock *> &instBlocks)
 {
 	if (auto dst = loadJmpDstBlock(pc, inst, instBlocks, true); dst) {
 		if (auto next = loadJmpNextBlock(pc, inst, instBlocks); next) {
@@ -293,8 +293,8 @@ void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
 }
 
 llvm::Expected<int> emitCondJmpWithDstAndSrc(
-	llvm::IRBuilder<> &builder, uint16_t pc, const ebpf_inst &inst,
-	const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+	llvm::IRBuilder<> &builder, uint32_t pc, const ebpf_inst &inst,
+	const std::map<uint32_t, llvm::BasicBlock *> &instBlocks,
 	llvm::Value **regs,
 	std::function<llvm::Value *(llvm::Value *, llvm::Value *)> func)
 {
@@ -313,7 +313,7 @@ llvm::Expected<int>
 emitExtFuncCall(llvm::IRBuilder<> &builder, const ebpf_inst &inst,
 		std::map<std::string, llvm::Function *> &extFunc,
 		llvm::Value **regs, llvm::FunctionType *helperFuncTy,
-		uint16_t pc, llvm::BasicBlock *exitBlk,
+		uint32_t pc, llvm::BasicBlock *exitBlk,
 		bool allow_implicit_external, bool kernel_compatible_mode)
 {
 	auto funcNameToCall = ext_func_sym(inst.imm);

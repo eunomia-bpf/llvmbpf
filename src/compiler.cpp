@@ -275,10 +275,10 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			name, jitModule.get());
 		extFunc[name] = currFunc;
 	}
-	std::map<uint16_t, Function *> kernelPseudoCallFunc;
-	uint16_t codegen_end_pc = insts.size();
+	std::map<uint32_t, Function *> kernelPseudoCallFunc;
+	uint32_t codegen_end_pc = insts.size();
 	if (kernel_compatible_mode) {
-		for (uint16_t i = 0; i < insts.size(); i++) {
+		for (uint32_t i = 0; i < insts.size(); i++) {
 			const auto &curr = insts[i];
 			if ((curr.opcode != EBPF_OP_CALL &&
 			     curr.opcode != (EBPF_OP_CALL | 0x8)) ||
@@ -294,7 +294,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 						std::to_string(i),
 					llvm::inconvertibleErrorCode());
 			}
-			const auto target_pc = static_cast<uint16_t>(dstBlkId);
+			const auto target_pc = static_cast<uint32_t>(dstBlkId);
 			codegen_end_pc = std::min(codegen_end_pc, target_pc);
 			auto symbol_name = kernel_pseudo_call_symbol(
 				static_cast<uint32_t>(target_pc));
@@ -311,7 +311,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	std::vector<bool> blockBegin(insts.size(), false);
 	// Split the blocks
 	blockBegin[0] = true;
-	for (uint16_t i = 0; i < insts.size(); i++) {
+	for (uint32_t i = 0; i < insts.size(); i++) {
 		auto curr = insts[i];
 		SPDLOG_TRACE("check pc {} opcode={} ", i,
 			     (uint16_t)curr.opcode);
@@ -319,14 +319,15 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 			blockBegin[i] = true;
 			SPDLOG_TRACE("mark {} block begin", i);
 		}
-		if (is_imm_jmp(curr)) {
-			SPDLOG_TRACE("mark {} block begin", i + curr.imm + 1);
-			blockBegin[i + curr.imm + 1] = true;
-		} else if (is_jmp(curr) &&
-			   i + curr.offset + 1 < blockBegin.size()) {
-			SPDLOG_TRACE("mark {} block begin",
-				     i + curr.offset + 1);
-			blockBegin[i + curr.offset + 1] = true;
+		if (is_jmp(curr)) {
+			const int64_t target =
+				(int64_t)i + 1 +
+				(int64_t)(is_imm_jmp(curr) ? curr.imm :
+							     curr.offset);
+			if (target >= 0 && target < (int64_t)blockBegin.size()) {
+				SPDLOG_TRACE("mark {} block begin", target);
+				blockBegin[target] = true;
+			}
 		}
 	}
 	FunctionType *func_ty;
@@ -457,13 +458,13 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 
 	// These blocks are the next instructions of the returning target of
 	// local functions
-	std::map<uint16_t, BlockAddress *> localFuncRetBlks;
+	std::map<uint32_t, BlockAddress *> localFuncRetBlks;
 	// Prepare basic blocks
-	std::map<uint16_t, BasicBlock *> instBlocks;
+	std::map<uint32_t, BasicBlock *> instBlocks;
 	{
 		IRBuilder<> builder(*context);
 
-		for (uint16_t i = 0; i < codegen_end_pc; i++) {
+		for (uint32_t i = 0; i < codegen_end_pc; i++) {
 			if (blockBegin[i]) {
 				// Create a block
 				auto currBlk = BasicBlock::Create(
@@ -557,16 +558,16 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	}
 	// When BTF line info is available, build a pc->entry lookup map
 	// and set up DWARF debug info so lifted IR carries DILocations.
-	// Key type matches pc (uint16_t) — sufficient for programs up to
-	// 64K instructions.  A pre-existing limitation of this codebase.
-	std::map<uint16_t, const btf_line_info_entry *> lineInfoMap;
+	// Key type matches pc (uint32_t), the same width the pc loop and every
+	// jump/call target map use, so programs beyond 64K instructions stay
+	// addressable.
+	std::map<uint32_t, const btf_line_info_entry *> lineInfoMap;
 	std::unique_ptr<DIBuilder> dbuilder;
 	DISubprogram *dbgSP = nullptr;
 
 	if (!vm.line_info_.empty()) {
 		for (const auto &entry : vm.line_info_)
-			lineInfoMap[static_cast<uint16_t>(entry.insn_idx)] =
-				&entry;
+			lineInfoMap[entry.insn_idx] = &entry;
 
 		dbuilder = std::make_unique<DIBuilder>(*jitModule);
 		const auto &srcName = vm.line_info_.front().file_name;
@@ -586,7 +587,7 @@ Expected<ThreadSafeModule> llvm_bpf_jit_context::generateModule(
 	// Iterate over instructions
 	BasicBlock *currBB = instBlocks[0];
 	IRBuilder<> builder(currBB);
-	for (uint16_t pc = 0; pc < codegen_end_pc; pc++) {
+	for (uint32_t pc = 0; pc < codegen_end_pc; pc++) {
 		auto inst = insts[pc];
 		if (blockBegin[pc]) {
 			if (auto itr = instBlocks.find(pc);
@@ -1423,7 +1424,7 @@ this conversion.
 							llvm::inconvertibleErrorCode());
 					}
 					auto itr = kernelPseudoCallFunc.find(
-						static_cast<uint16_t>(
+						static_cast<uint32_t>(
 							target_pc));
 					if (itr == kernelPseudoCallFunc.end()) {
 						return llvm::make_error<

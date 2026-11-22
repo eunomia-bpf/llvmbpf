@@ -2,7 +2,9 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <cstdint>
 #include <iostream>
+#include <vector>
 #include "llvmbpf.hpp"
+#include "ebpf_inst.h"
 
 /*
 
@@ -515,4 +517,36 @@ TEST_CASE("Test NVPTX backend availability")
 	REQUIRE_THROWS_WITH(vm.generate_ptx("sm_60"),
 		"NVPTX backend is not available in this LLVM build");
 #endif
+}
+
+// A program with more than 64K instructions used to hang codegen: the pc
+// loop counter and every jump/call target map were uint16_t, so the loop
+// wrapped at 65536 and never reached its bound. Keep the program
+// straight-line and cheap so the case stays a unit test.
+TEST_CASE("Programs longer than 65536 instructions compile and run")
+{
+	constexpr uint32_t n_adds = 70000;
+	std::vector<ebpf_inst> insns;
+	insns.reserve(n_adds + 2);
+	// r0 = 0
+	insns.push_back({ .opcode = 0xb7, .dst = 0, .src = 0,
+			  .offset = 0, .imm = 0 });
+	// n_adds * r0 += 1
+	for (uint32_t i = 0; i < n_adds; i++)
+		insns.push_back({ .opcode = 0x07, .dst = 0, .src = 0,
+				  .offset = 0, .imm = 1 });
+	insns.push_back({ .opcode = 0x95 });
+
+	REQUIRE(insns.size() > 65536);
+	bpftime::llvmbpf_vm vm;
+	REQUIRE(vm.load_code(insns.data(),
+			     insns.size() * sizeof(ebpf_inst)) == 0);
+	REQUIRE(vm.load_line_info({ { 65540, "big.bpf.c", 7, 1 },
+				    { 70000, "big.bpf.c", 9, 1 } }) == 0);
+	REQUIRE(vm.compile());
+
+	uint64_t mem = 0;
+	uint64_t ret = 0;
+	REQUIRE(vm.exec(&mem, sizeof(mem), ret) == 0);
+	REQUIRE(ret == n_adds);
 }

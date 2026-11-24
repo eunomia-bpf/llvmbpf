@@ -77,18 +77,18 @@ emitJmpLoadSrcAndDstAndZero(const ebpf_inst &inst, llvm::Value **regs,
 			    llvm::IRBuilder<> &builder);
 
 llvm::Expected<llvm::BasicBlock *>
-loadJmpDstBlock(uint16_t pc, const ebpf_inst &inst,
-		const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+loadJmpDstBlock(uint32_t pc, const ebpf_inst &inst,
+		const std::map<uint32_t, llvm::BasicBlock *> &instBlocks,
 		bool useOffset);
 llvm::Expected<llvm::BasicBlock *>
-loadCallDstBlock(uint16_t pc, const ebpf_inst &inst,
-		 const std::map<uint16_t, llvm::BasicBlock *> &instBlocks);
+loadCallDstBlock(uint32_t pc, const ebpf_inst &inst,
+		 const std::map<uint32_t, llvm::BasicBlock *> &instBlocks);
 llvm::Expected<llvm::BasicBlock *>
-loadJmpNextBlock(uint16_t pc, const ebpf_inst &inst,
-		 const std::map<uint16_t, llvm::BasicBlock *> &instBlocks);
+loadJmpNextBlock(uint32_t pc, const ebpf_inst &inst,
+		 const std::map<uint32_t, llvm::BasicBlock *> &instBlocks);
 llvm::Expected<std::pair<llvm::BasicBlock *, llvm::BasicBlock *> >
-localJmpDstAndNextBlk(uint16_t pc, const ebpf_inst &inst,
-		      const std::map<uint16_t, llvm::BasicBlock *> &instBlocks);
+localJmpDstAndNextBlk(uint32_t pc, const ebpf_inst &inst,
+		      const std::map<uint32_t, llvm::BasicBlock *> &instBlocks);
 llvm::Value *emitLDXLoadingAddr(llvm::IRBuilder<> &builder, llvm::Value **regs,
 				const ebpf_inst &inst);
 void emitLDXStoringResult(llvm::IRBuilder<> &builder, llvm::Value **regs,
@@ -99,8 +99,8 @@ void emitLoadX(llvm::IRBuilder<> &builder, llvm::Value **regs,
 	       bool sign_extend = false);
 
 llvm::Expected<int> emitCondJmpWithDstAndSrc(
-	llvm::IRBuilder<> &builder, uint16_t pc, const ebpf_inst &inst,
-	const std::map<uint16_t, llvm::BasicBlock *> &instBlocks,
+	llvm::IRBuilder<> &builder, uint32_t pc, const ebpf_inst &inst,
+	const std::map<uint32_t, llvm::BasicBlock *> &instBlocks,
 	llvm::Value **regs,
 	std::function<llvm::Value *(llvm::Value *, llvm::Value *)> func);
 
@@ -108,7 +108,7 @@ llvm::Expected<int>
 emitExtFuncCall(llvm::IRBuilder<> &builder, const ebpf_inst &inst,
 		std::map<std::string, llvm::Function *> &extFunc,
 		llvm::Value **regs, llvm::FunctionType *helperFuncTy,
-		uint16_t pc, llvm::BasicBlock *exitBlk,
+		uint32_t pc, llvm::BasicBlock *exitBlk,
 		bool allow_implicit_external = false,
 		bool kernel_compatible_mode = false);
 void emitAtomicBinOp(llvm::IRBuilder<> &builder, llvm::Value **regs,
